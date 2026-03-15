@@ -1,0 +1,678 @@
+/* Root element font size is set dynamically by useResponsiveFontSize hook */
+:root {
+  /* CSS Custom Properties for Responsive Sizing */
+  /* All sizes use rem units which scale relative to the root font-size */
+
+  /* Base spacing scale (relative to font size) */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-xxl: 3rem;
+
+  /* Component sizes */
+  --icon-size: 1.5rem;
+  --icon-size-lg: 2rem;
+  --icon-size-xl: 2.5rem;
+
+  /* Button sizes */
+  --button-padding-y: 0.375rem;
+  --button-padding-x: 0.75rem;
+  --button-padding-sm-y: 0.25rem;
+  --button-padding-sm-x: 0.5rem;
+  --button-padding-lg-y: 0.5rem;
+  --button-padding-lg-x: 1rem;
+  --button-font-size: 1rem;
+  --button-font-size-sm: 0.875rem;
+  --button-font-size-lg: 1.125rem;
+  --button-min-width: 2.5rem;
+  --button-min-height: 2.5rem;
+  --button-icon-size: 2rem;
+
+  /* Form controls */
+  --input-padding-y: 0.375rem;
+  --input-padding-x: 0.75rem;
+  --input-font-size: 1rem;
+  --input-line-height: 1.5;
+
+  /* Border radius */
+  --border-radius: 0.25rem;
+  --border-radius-sm: 0.2rem;
+  --border-radius-lg: 0.3rem;
+
+  /* Font sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-xxl: 1.5rem;
+
+  /* Line heights */
+  --line-height-base: 1.5;
+  --line-height-sm: 1.25;
+  --line-height-lg: 2;
+
+  /* Runtime-controlled values populated by useResponsiveFontSize */
+  --pp-root-font-size: 16px;
+  --pp-scale: 1;
+
+  /* Light theme colors (default) */
+  --pp-bg-color: #ffffff;
+  --pp-bg-secondary: #f8f9fa;
+  --pp-bg-tertiary: #e9ecef;
+  --pp-text-color: #212529;
+  --pp-text-muted: #6c757d;
+  --pp-border-color: #dee2e6;
+  --pp-panel-bg: #ffffff;
+  --pp-input-bg: #ffffff;
+  --pp-input-border: #ced4da;
+  --pp-dropdown-bg: #ffffff;
+  --pp-dropdown-hover: #f8f9fa;
+  --pp-modal-bg: #ffffff;
+  --pp-card-bg: #ffffff;
+  --pp-toolbar-bg: #f8f9fa;
+  --pp-tree-selected-bg: #0d6efd;
+  --pp-tree-selected-text: #ffffff;
+  --pp-tree-hover-bg: #e9ecef;
+  --pp-scrollbar-track: #f1f1f1;
+  --pp-scrollbar-thumb: #c1c1c1;
+  --pp-scrollbar-thumb-hover: #a1a1a1;
+}
+
+/* Dark theme colors */
+[data-theme="dark"] {
+  --pp-bg-color: #1a1a1a;
+  --pp-bg-secondary: #2d2d2d;
+  --pp-bg-tertiary: #3d3d3d;
+  --pp-text-color: #e9ecef;
+  --pp-text-muted: #adb5bd;
+  --pp-border-color: #495057;
+  --pp-panel-bg: #212529;
+  --pp-input-bg: #2d2d2d;
+  --pp-input-border: #495057;
+  --pp-dropdown-bg: #2d2d2d;
+  --pp-dropdown-hover: #3d3d3d;
+  --pp-modal-bg: #212529;
+  --pp-card-bg: #2d2d2d;
+  --pp-toolbar-bg: #2d2d2d;
+  --pp-tree-selected-bg: #0d6efd;
+  --pp-tree-selected-text: #ffffff;
+  --pp-tree-hover-bg: #3d3d3d;
+  --pp-scrollbar-track: #2d2d2d;
+  --pp-scrollbar-thumb: #4d4d4d;
+  --pp-scrollbar-thumb-hover: #6d6d6d;
+}
+
+html {
+  /* Base font size will be set dynamically by JavaScript */
+  font-size: 16px; /* Fallback */
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  background-color: var(--pp-bg-color);
+  color: var(--pp-text-color);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+/* Override Bootstrap defaults to use rem units */
+.btn {
+  padding: var(--button-padding-y) var(--button-padding-x);
+  font-size: var(--button-font-size);
+  line-height: var(--line-height-base);
+  border-radius: var(--border-radius);
+  min-width: var(--button-min-width);
+  min-height: var(--button-min-height);
+}
+
+.btn-sm {
+  padding: var(--button-padding-sm-y) var(--button-padding-sm-x);
+  font-size: var(--button-font-size-sm);
+  min-width: calc(var(--button-min-width) * 0.8);
+  min-height: calc(var(--button-min-height) * 0.8);
+}
+
+.btn-lg {
+  padding: var(--button-padding-lg-y) var(--button-padding-lg-x);
+  font-size: var(--button-font-size-lg);
+  min-width: calc(var(--button-min-width) * 1.2);
+  min-height: calc(var(--button-min-height) * 1.2);
+}
+
+.btn-group-vertical .btn {
+  min-width: var(--button-min-width);
+  min-height: var(--button-min-height);
+}
+
+/* Form controls */
+.form-control {
+  padding: var(--input-padding-y) var(--input-padding-x);
+  font-size: var(--input-font-size);
+  line-height: var(--input-line-height);
+  border-radius: var(--border-radius);
+}
+
+.form-control-sm {
+  padding: var(--button-padding-sm-y) var(--button-padding-sm-x);
+  font-size: var(--font-size-sm);
+}
+
+.form-control-lg {
+  padding: var(--button-padding-lg-y) var(--button-padding-lg-x);
+  font-size: var(--font-size-lg);
+}
+
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-check {
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Icons */
+.button-icon,
+.icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  object-fit: contain;
+}
+
+/* SVG icons scale with font size (1em = current font size) */
+.pp-svg-icon {
+  width: 2.5em;
+  height: 2.5em;
+  vertical-align: middle;
+}
+
+.pp-svg-icon.pp-svg-icon-sm {
+  width: 0.85em;
+  height: 0.85em;
+}
+
+/* Icons inside buttons should be larger to fill button space */
+.btn .button-icon,
+.btn .icon,
+.btn img.button-icon,
+.btn i {
+  width: var(--button-icon-size);
+  height: var(--button-icon-size);
+  font-size: var(--button-icon-size);
+  object-fit: contain;
+}
+
+/* SVG icons inside buttons — match FontAwesome icon sizing */
+.btn .pp-svg-icon {
+  width: calc(var(--button-icon-size) * 1.25);
+  height: calc(var(--button-icon-size) * 1.25);
+  display: block;
+}
+
+/* Dense SVG icons that already fill their viewBox — render at base icon size */
+.btn .pp-svg-icon.pp-svg-icon-dense {
+  width: var(--button-icon-size);
+  height: var(--button-icon-size);
+}
+
+.btn .pp-svg-icon.pp-svg-icon-sm {
+  width: calc(var(--button-icon-size) * 0.65);
+  height: calc(var(--button-icon-size) * 0.65);
+}
+
+/* Special handling for edit button icon - fill button width due to non-square aspect ratio */
+.btn .title-button-icon {
+  width: 100% !important;
+  height: var(--button-icon-size);
+  object-fit: contain;
+}
+
+.icon-lg {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}
+
+/* Container spacing */
+.container,
+.container-fluid {
+  padding-right: var(--spacing-md);
+  padding-left: var(--spacing-md);
+}
+
+/* Typography */
+h1 {
+  font-size: var(--font-size-xxl);
+  margin-bottom: var(--spacing-lg);
+}
+h2 {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-md);
+}
+h3 {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--spacing-md);
+}
+h4 {
+  font-size: var(--font-size-base);
+  margin-bottom: var(--spacing-sm);
+}
+h5 {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-sm);
+}
+h6 {
+  font-size: var(--font-size-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Spacing utilities */
+.p-1 {
+  padding: var(--spacing-xs);
+}
+.p-2 {
+  padding: var(--spacing-sm);
+}
+.p-3 {
+  padding: var(--spacing-md);
+}
+.p-4 {
+  padding: var(--spacing-lg);
+}
+.p-5 {
+  padding: var(--spacing-xl);
+}
+
+.m-1 {
+  margin: var(--spacing-xs);
+}
+.m-2 {
+  margin: var(--spacing-sm);
+}
+.m-3 {
+  margin: var(--spacing-md);
+}
+.m-4 {
+  margin: var(--spacing-lg);
+}
+.m-5 {
+  margin: var(--spacing-xl);
+}
+
+.mt-1,
+.my-1 {
+  margin-top: var(--spacing-xs);
+}
+.mt-2,
+.my-2 {
+  margin-top: var(--spacing-sm);
+}
+.mt-3,
+.my-3 {
+  margin-top: var(--spacing-md);
+}
+.mt-4,
+.my-4 {
+  margin-top: var(--spacing-lg);
+}
+.mt-5,
+.my-5 {
+  margin-top: var(--spacing-xl);
+}
+
+.mb-1,
+.my-1 {
+  margin-bottom: var(--spacing-xs);
+}
+.mb-2,
+.my-2 {
+  margin-bottom: var(--spacing-sm);
+}
+.mb-3,
+.my-3 {
+  margin-bottom: var(--spacing-md);
+}
+.mb-4,
+.my-4 {
+  margin-bottom: var(--spacing-lg);
+}
+.mb-5,
+.my-5 {
+  margin-bottom: var(--spacing-xl);
+}
+
+.ml-1,
+.mx-1,
+.ms-1 {
+  margin-left: var(--spacing-xs);
+}
+.ml-2,
+.mx-2,
+.ms-2 {
+  margin-left: var(--spacing-sm);
+}
+.ml-3,
+.mx-3,
+.ms-3 {
+  margin-left: var(--spacing-md);
+}
+.ml-4,
+.mx-4,
+.ms-4 {
+  margin-left: var(--spacing-lg);
+}
+.ml-5,
+.mx-5,
+.ms-5 {
+  margin-left: var(--spacing-xl);
+}
+
+.mr-1,
+.mx-1,
+.me-1 {
+  margin-right: var(--spacing-xs);
+}
+.mr-2,
+.mx-2,
+.me-2 {
+  margin-right: var(--spacing-sm);
+}
+.mr-3,
+.mx-3,
+.me-3 {
+  margin-right: var(--spacing-md);
+}
+.mr-4,
+.mx-4,
+.me-4 {
+  margin-right: var(--spacing-lg);
+}
+.mr-5,
+.mx-5,
+.me-5 {
+  margin-right: var(--spacing-xl);
+}
+
+/* ========================================
+   DARK MODE STYLES
+   ======================================== */
+
+/* Form controls */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+  background-color: var(--pp-input-bg);
+  border-color: var(--pp-input-border);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+  background-color: var(--pp-input-bg);
+  border-color: #0d6efd;
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .form-control::placeholder {
+  color: var(--pp-text-muted);
+}
+
+[data-theme="dark"] .form-control:disabled,
+[data-theme="dark"] .form-select:disabled {
+  background-color: var(--pp-bg-tertiary);
+  color: var(--pp-text-muted);
+}
+
+/* Buttons */
+[data-theme="dark"] .btn-light {
+  background-color: var(--pp-bg-tertiary);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .btn-light:hover {
+  background-color: var(--pp-bg-secondary);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .btn-outline-secondary {
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .btn-outline-secondary:hover {
+  background-color: var(--pp-bg-tertiary);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+/* Cards and panels */
+[data-theme="dark"] .card {
+  background-color: var(--pp-card-bg);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .card-header {
+  background-color: var(--pp-bg-tertiary);
+  border-color: var(--pp-border-color);
+}
+
+/* Modals */
+[data-theme="dark"] .modal-content {
+  background-color: var(--pp-modal-bg);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .modal-header {
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+  border-color: var(--pp-border-color);
+}
+
+/* Dropdowns */
+[data-theme="dark"] .dropdown-menu {
+  background-color: var(--pp-dropdown-bg);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .dropdown-item {
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .dropdown-item:hover,
+[data-theme="dark"] .dropdown-item:focus {
+  background-color: var(--pp-dropdown-hover);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .dropdown-divider {
+  border-color: var(--pp-border-color);
+}
+
+/* Tables */
+[data-theme="dark"] .table {
+  color: var(--pp-text-color);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: var(--pp-bg-secondary);
+}
+
+[data-theme="dark"] .table-hover > tbody > tr:hover {
+  background-color: var(--pp-bg-tertiary);
+}
+
+/* Nav tabs */
+[data-theme="dark"] .nav-tabs {
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .nav-tabs .nav-link {
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .nav-tabs .nav-link:hover {
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .nav-tabs .nav-link.active {
+  background-color: var(--pp-bg-color);
+  border-color: var(--pp-border-color) var(--pp-border-color) var(--pp-bg-color);
+  color: var(--pp-text-color);
+}
+
+/* Lists */
+[data-theme="dark"] .list-group-item {
+  background-color: var(--pp-panel-bg);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .list-group-item:hover {
+  background-color: var(--pp-bg-secondary);
+}
+
+[data-theme="dark"] .list-group-item.active {
+  background-color: var(--pp-tree-selected-bg);
+  border-color: var(--pp-tree-selected-bg);
+  color: var(--pp-tree-selected-text);
+}
+
+/* Text utilities */
+[data-theme="dark"] .text-muted {
+  color: var(--pp-text-muted) !important;
+}
+
+[data-theme="dark"] .text-dark {
+  color: var(--pp-text-color) !important;
+}
+
+/* Borders */
+[data-theme="dark"] .border {
+  border-color: var(--pp-border-color) !important;
+}
+
+[data-theme="dark"] fieldset.border {
+  border-color: var(--pp-border-color) !important;
+}
+
+[data-theme="dark"] legend {
+  color: var(--pp-text-color);
+}
+
+/* Background utilities */
+[data-theme="dark"] .bg-light {
+  background-color: var(--pp-bg-secondary) !important;
+}
+
+[data-theme="dark"] .bg-white {
+  background-color: var(--pp-bg-color) !important;
+}
+
+/* Scrollbars */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--pp-scrollbar-track);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--pp-scrollbar-thumb);
+  border-radius: 5px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--pp-scrollbar-thumb-hover);
+}
+
+/* Input groups */
+[data-theme="dark"] .input-group-text {
+  background-color: var(--pp-bg-tertiary);
+  border-color: var(--pp-input-border);
+  color: var(--pp-text-color);
+}
+
+/* Close button */
+[data-theme="dark"] .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Alerts */
+[data-theme="dark"] .alert {
+  border-color: var(--pp-border-color);
+}
+
+/* Form check */
+[data-theme="dark"] .form-check-label {
+  color: var(--pp-text-color);
+}
+
+/* Small text */
+[data-theme="dark"] small,
+[data-theme="dark"] .small,
+[data-theme="dark"] .form-text {
+  color: var(--pp-text-muted);
+}
+
+/* Sidebar Icon Buttons (User, Leader, etc matching Playlist buttons width) */
+.sidebar-icon-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: var(--spacing-xs) !important;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+}
+/* Print Styles - Always use light mode for printing */
+@media print {
+  /* Force light mode colors for all elements when printing */
+  :root {
+    color-scheme: light;
+  }
+
+  /* Remove dark theme styling */
+  [data-theme="dark"],
+  [data-theme="dark"] * {
+    background-color: white !important;
+    color: black !important;
+    border-color: #dee2e6 !important;
+  }
+
+  /* Ensure text is black for printing */
+  body,
+  body * {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Restore proper styling for common elements */
+  .wysiwyg-host {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Links should be readable in print */
+  a,
+  a * {
+    color: #0066cc !important;
+  }
+}

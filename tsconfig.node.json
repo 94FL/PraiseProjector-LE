@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "composite": true,
+    "noEmit": false
+  },
+  "include": [
+    "electron",
+    "vite.config.ts",
+    "src/types.ts",
+    "src/types/udp.ts",
+    "common/**/*.ts"
+  ]
+}

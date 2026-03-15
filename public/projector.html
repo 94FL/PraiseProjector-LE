@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Praise Projector Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        
+        #display-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+        }
+        
+        #display-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .no-display {
+            color: #333;
+            font-size: 48px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="display-container">
+        <div class="no-display">Praise Projector Display</div>
+        <img id="display-image" style="display: none;" alt="Display Content" />
+    </div>
+    
+    <script>
+        const container = document.getElementById('display-container');
+        const img = document.getElementById('display-image');
+        const noDisplay = document.querySelector('.no-display');
+        
+        // BroadcastChannel for communication that survives page reload
+        const channel = new BroadcastChannel('pp-projector');
+        
+        // Handle display updates from main window
+        const handleDisplayUpdate = (imageData) => {
+            if (imageData) {
+                img.src = imageData;
+                img.style.display = 'block';
+                if (noDisplay) noDisplay.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                if (noDisplay) noDisplay.style.display = 'block';
+            }
+        };
+        
+        // Listen for messages via BroadcastChannel (works after main page reload)
+        channel.onmessage = (event) => {
+            if (event.data.type === 'UPDATE_DISPLAY') {
+                handleDisplayUpdate(event.data.imageData);
+            } else if (event.data.type === 'PROJECTOR_PING') {
+                // Main window is asking if we're alive - respond with READY
+                channel.postMessage({
+                    type: 'PROJECTOR_READY',
+                    width: window.innerWidth,
+                    height: window.innerHeight
+                });
+            } else if (event.data.type === 'PROJECTOR_CLOSE') {
+                // Main window is requesting us to close
+                window.close();
+            }
+        };
+        
+        // Listen for messages from parent window (direct postMessage)
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'UPDATE_DISPLAY') {
+                handleDisplayUpdate(event.data.imageData);
+            }
+        });
+        
+        // Save window position/size and fullscreen state to localStorage
+        const BOUNDS_KEY = 'pp-projector-bounds';
+        const saveBounds = () => {
+            try {
+                localStorage.setItem(BOUNDS_KEY, JSON.stringify({
+                    x: window.screenX,
+                    y: window.screenY,
+                    width: window.outerWidth,
+                    height: window.outerHeight,
+                    fullscreen: !!document.fullscreenElement
+                }));
+            } catch (_) { /* ignore */ }
+        };
+        // Debounce saves during continuous move/resize
+        let boundsTimer = null;
+        const debouncedSaveBounds = () => {
+            if (boundsTimer) clearTimeout(boundsTimer);
+            boundsTimer = setTimeout(saveBounds, 300);
+        };
+        window.addEventListener('resize', debouncedSaveBounds);
+        // 'move' isn't a standard event on all browsers, poll screenX/Y changes as fallback
+        let lastScreenX = window.screenX, lastScreenY = window.screenY;
+        setInterval(() => {
+            if (window.screenX !== lastScreenX || window.screenY !== lastScreenY) {
+                lastScreenX = window.screenX;
+                lastScreenY = window.screenY;
+                debouncedSaveBounds();
+            }
+        }, 500);
+
+        // Send resize events via BroadcastChannel
+        const sendResize = () => {
+            channel.postMessage({
+                type: 'PROJECTOR_RESIZE',
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+            // Also send to opener if it exists (legacy support)
+            if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({
+                    type: 'PROJECTOR_RESIZE',
+                    width: window.innerWidth,
+                    height: window.innerHeight
+                }, '*');
+            }
+        };
+        
+        window.addEventListener('resize', sendResize);
+        
+        // Notify main window that projector is ready
+        channel.postMessage({
+            type: 'PROJECTOR_READY',
+            width: window.innerWidth,
+            height: window.innerHeight
+        });
+        
+        // Also notify via opener if available (legacy support)
+        if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({ type: 'PROJECTOR_READY' }, '*');
+            sendResize();
+        }
+        
+        // Notify main window when this window is about to close
+        window.addEventListener('beforeunload', () => {
+            saveBounds();
+            channel.postMessage({ type: 'PROJECTOR_CLOSED' });
+        });
+        
+        // Track fullscreen changes and save state
+        document.addEventListener('fullscreenchange', () => {
+            saveBounds();
+        });
+
+        // Restore fullscreen if it was active in the previous session.
+        // Fullscreen API requires a user gesture, so we enter on first click.
+        let wasFullscreen = false;
+        try {
+            const saved = localStorage.getItem(BOUNDS_KEY);
+            if (saved) {
+                const b = JSON.parse(saved);
+                wasFullscreen = !!b.fullscreen;
+            }
+        } catch (_) { /* ignore */ }
+
+        let fullscreenHandled = false;
+        document.addEventListener('click', () => {
+            if (!fullscreenHandled && wasFullscreen && document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Fullscreen restore failed:', err);
+                });
+                fullscreenHandled = true;
+            }
+        });
+        
+        // Also try keyboard shortcut F11 hint
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F11') {
+                e.preventDefault();
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                }
+            }
+        });
+        
+        // Prevent context menu
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+    </script>
+</body>
+</html>

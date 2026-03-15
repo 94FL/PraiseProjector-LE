@@ -1,0 +1,27 @@
+{
+  "name": "pp-client",
+  "version": "2.0.0",
+  "private": true,
+  "description": "PraiseProjector browser client",
+  "scripts": {
+    "build": "npm run build:release",
+    "build:debug": "browserify ./pp-api.ts -p tsify --debug -s P -o ../public/app/pp-api.js",
+    "build:release": "browserify ./pp-api.ts -p tsify -s P | uglifyjs -c -m -o ../public/app/pp-api.js",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "browserify": "^17.0.0",
+    "tsify": "^5.0.4",
+    "uglify-js": "^3.17.4",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "color-calendar": "^1.0.7",
+    "core-js": "^3.19.1",
+    "fp-ts": "^2.16.11",
+    "io-ts": "^2.2.22",
+    "yalps": "^0.5.7"
+  }
+}

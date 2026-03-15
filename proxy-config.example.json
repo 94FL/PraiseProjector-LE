@@ -1,0 +1,6 @@
+{
+  "cloudApiHost": "https://your-server.example.com",
+  "proxyAllowedHosts": [
+    "your-server.example.com"
+  ]
+}

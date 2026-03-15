@@ -1,0 +1,54 @@
+/*
+  Override Bootstrap modal-backdrop opacity to prevent semi-transparency.
+  Bootstrap's default .modal-backdrop.show uses opacity which makes content transparent.
+  By setting background-color with RGBA and forcing opacity to 1, we ensure the backdrop
+  is semi-transparent but the modal content is fully opaque.
+*/
+.eula-backdrop.modal-backdrop.show {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+  z-index: 1060;
+}
+
+/* Ensure the modal itself appears above its own backdrop */
+.eula-backdrop .modal {
+  z-index: 1061;
+}
+
+.eula-dialog {
+  max-height: 90vh;
+}
+
+.eula-body {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.eula-body h1 {
+  font-size: 1.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.eula-body h2 {
+  font-size: 1.1rem;
+  margin-top: 1.2rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 0.2rem;
+}
+
+.eula-body h3 {
+  font-size: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.eula-body p,
+.eula-body li {
+  margin-bottom: 0.4rem;
+}
+
+.eula-body ol,
+.eula-body ul {
+  padding-left: 1.5rem;
+}

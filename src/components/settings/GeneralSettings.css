@@ -1,0 +1,133 @@
+/* Margin editor visual layout */
+.margin-editor {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.25rem;
+  align-items: center;
+  justify-items: center;
+  padding: 0.5rem;
+  width: 100%;
+}
+
+/* Top input - centered in top row */
+.margin-input-top {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Left input */
+.margin-input-left {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+}
+
+/* Preview box in the center - fills available space */
+.margin-preview-box {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-color: #333;
+  border: 2px solid #888;
+  position: relative;
+  overflow: hidden;
+}
+
+.margin-preview-inner {
+  position: absolute;
+  background-color: rgba(100, 149, 237, 0.4);
+  border: 1px dashed rgba(100, 149, 237, 0.8);
+  transition: all 0.15s ease;
+}
+
+.margin-preview-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Right input */
+.margin-input-right {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+}
+
+/* Bottom input - centered in bottom row */
+.margin-input-bottom {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+/* Margin input styling */
+.margin-input {
+  width: 65px;
+}
+
+.margin-input input {
+  text-align: center;
+  padding: 0.2rem 0.25rem;
+  font-size: 0.85rem;
+}
+
+.margin-input label {
+  font-size: 0.75rem;
+  text-align: center;
+  margin-bottom: 0.1rem;
+  color: #999;
+  display: block;
+}
+
+.margin-fieldset {
+  border-radius: 4px;
+}
+
+/* Two-column mode (md+): stretch the textarea to fill remaining vertical space */
+@media (min-width: 768px) {
+  .general-settings-root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .general-settings-root > .row {
+    flex: 1;
+  }
+
+  .general-settings-right-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .non-breaking-words-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .non-breaking-words-group textarea {
+    flex: 1;
+    min-height: 4rem;
+    resize: none;
+  }
+}
+
+.margin-title {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: start;
+  font-size: 1.275rem;
+  font-weight: 600;
+  color: inherit;
+}

@@ -1,0 +1,12 @@
+.domain-dropdown-menu {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.client-state-col {
+  width: 2rem;
+}
+
+.clickable {
+  cursor: pointer;
+}

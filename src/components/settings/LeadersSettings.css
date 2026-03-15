@@ -1,0 +1,59 @@
+/* 
+  Override Bootstrap modal-backdrop for the nested "Add Leader" dialog.
+  We need high specificity to beat Bootstrap's default `.modal-backdrop.show` rule,
+  which uses `opacity`. By setting the background-color with an RGBA value and
+  forcing the opacity of the container to 1, we ensure the backdrop is transparent
+  but the modal content within it is not.
+*/
+.leader-add-dialog-backdrop.modal-backdrop.show {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  opacity: 1 !important;
+  z-index: 1060;
+}
+
+/* Ensure the modal itself appears above its own backdrop */
+.leader-add-dialog-backdrop .modal {
+  z-index: 1061;
+}
+
+/* Fill available space in settings tab and let the preferences table stretch */
+.leaders-settings-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.leaders-settings-container > .form-group {
+  margin-right: 0.5rem;
+}
+
+.leaders-settings-container > fieldset {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 26rem;
+  overflow: hidden;
+  margin-right: 0.5rem;
+}
+
+/* Prevent buttons from shrinking in flex container - let them auto-size to content */
+.leaders-settings-buttons .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Dark mode styles */
+[data-theme="dark"] .leader-add-dialog-backdrop .modal-content {
+  background: var(--pp-modal-bg);
+  color: var(--pp-text-color);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .leader-add-dialog-backdrop .modal-header {
+  border-bottom-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .leader-add-dialog-backdrop .modal-footer {
+  border-top-color: var(--pp-border-color);
+}

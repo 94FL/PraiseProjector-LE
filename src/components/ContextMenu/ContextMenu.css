@@ -1,0 +1,73 @@
+.context-menu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  padding: 4px 0;
+  min-width: 150px;
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
+  z-index: 10001;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu-icon {
+  width: 14px;
+  text-align: center;
+}
+
+.context-menu-item:hover:not(.disabled) {
+  background: #f0f0f0;
+}
+
+.context-menu-item.disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* Inline select dropdown inside a menu item */
+.context-menu-select {
+  width: 52px;
+  margin-left: auto;
+  padding: 1px 2px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* Dark mode styles */
+[data-theme="dark"] .context-menu {
+  background: var(--pp-dropdown-bg);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .context-menu-item {
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .context-menu-item:hover:not(.disabled) {
+  background: var(--pp-dropdown-hover);
+}
+
+[data-theme="dark"] .context-menu-item.disabled {
+  color: var(--pp-text-muted);
+}
+
+[data-theme="dark"] .context-menu-select {
+  background: var(--pp-dropdown-bg);
+  border-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}

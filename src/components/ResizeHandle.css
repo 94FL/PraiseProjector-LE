@@ -1,0 +1,42 @@
+.resize-handle-outer {
+  position: relative;
+  outline: none;
+  background-color: var(--bs-border-color);
+  transition: background-color 0.2s ease-in-out;
+}
+
+.resize-handle-outer[data-panel-group-direction="horizontal"] {
+  width: 1.5px;
+}
+
+.resize-handle-outer[data-panel-group-direction="vertical"] {
+  height: 1.5px;
+}
+
+.resize-handle-outer[data-resize-handle-active] {
+  background-color: var(--bs-primary);
+}
+
+.resize-handle-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--bs-border-color-translucent);
+  border-radius: 5px;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.resize-handle-outer[data-panel-group-direction="horizontal"] .resize-handle-inner {
+  width: 4px;
+  height: 40px;
+}
+
+.resize-handle-outer[data-panel-group-direction="vertical"] .resize-handle-inner {
+  width: 40px;
+  height: 4px;
+}
+
+.resize-handle-outer[data-resize-handle-active] .resize-handle-inner {
+  background-color: var(--bs-primary);
+}

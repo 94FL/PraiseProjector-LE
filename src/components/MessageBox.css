@@ -1,0 +1,67 @@
+.messagebox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.messagebox-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 400px;
+  max-width: 600px;
+  margin: 20px;
+}
+
+.messagebox-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.messagebox-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.messagebox-body {
+  padding: 20px;
+}
+
+.messagebox-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.messagebox-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.messagebox-footer .btn {
+  min-width: 80px;
+}
+
+/* Dark mode styles */
+[data-theme="dark"] .messagebox-container {
+  background: var(--pp-modal-bg);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .messagebox-header {
+  border-bottom-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .messagebox-footer {
+  border-top-color: var(--pp-border-color);
+}

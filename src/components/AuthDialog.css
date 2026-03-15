@@ -1,0 +1,20 @@
+/* 
+  Override Bootstrap modal-backdrop opacity to prevent semi-transparency.
+  Bootstrap's default .modal-backdrop.show uses opacity which makes content transparent.
+  By setting background-color with RGBA and forcing opacity to 1, we ensure the backdrop
+  is semi-transparent but the modal content is fully opaque.
+*/
+.auth-dialog-backdrop.modal-backdrop.show {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+  z-index: 1050;
+}
+
+/* Ensure the modal itself appears above its own backdrop */
+.auth-dialog-backdrop .modal {
+  z-index: 1051;
+}
+
+.modal-dialog {
+  max-width: 400px;
+}

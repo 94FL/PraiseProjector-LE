@@ -1,0 +1,75 @@
+.update-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--bg-secondary, #333);
+  color: var(--text-primary, #fff);
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10000;
+  max-width: 400px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.update-message {
+  flex: 1;
+  font-size: 14px;
+}
+
+.update-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.update-btn-primary {
+  background: #4caf50;
+  color: white;
+}
+
+.update-btn-primary:hover {
+  background: #43a047;
+}
+
+.update-btn-secondary {
+  background: transparent;
+  color: var(--text-secondary, #aaa);
+  border: 1px solid var(--border-color, #555);
+}
+
+.update-btn-secondary:hover {
+  background: var(--bg-tertiary, #444);
+}
+
+.update-progress {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary, #444);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.update-progress-bar {
+  height: 100%;
+  background: #4caf50;
+  transition: width 0.3s ease;
+}

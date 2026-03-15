@@ -1,0 +1,87 @@
+.song-preferences-inner {
+  min-height: 0;
+}
+
+.song-preferences-editor-container {
+  min-height: 18rem;
+  flex: 1;
+}
+
+.song-preferences-table-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.song-preferences-table thead {
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 1;
+}
+
+/* Checkbox column width for merge mode */
+.song-preferences-table .merge-checkbox-col {
+  width: 30px;
+}
+
+/* Prefer from playlists button - match checkbox label height */
+.pref-from-playlist-btn {
+  font-size: 0.8rem;
+  padding: 0.05rem 0.35rem;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Mode column — clickable icon cell */
+.song-preferences-table .pref-mode-cell {
+  text-align: center;
+  cursor: pointer;
+}
+
+.song-preferences-table .pref-mode-cell-readonly {
+  text-align: center;
+}
+
+/* Instructions cell - double-click to edit */
+.song-preferences-table .instructions-cell {
+  cursor: pointer;
+  text-align: center;
+}
+
+/* Context menu type picker — red heart icon + three hearts in a row */
+.context-menu-heart-icon {
+  color: #dc3545;
+}
+
+.context-menu-type-picker {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: space-evenly;
+}
+
+.context-menu-type-picker .type-pick {
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  padding: 2px 4px;
+}
+
+.context-menu-type-picker .type-pick:hover {
+  opacity: 0.8;
+}
+
+.context-menu-type-picker .type-pick.active {
+  opacity: 1;
+}
+
+/* Left-side button panel */
+.song-pref-buttons .btn {
+  padding: 2px 6px;
+}
+
+/* Dark mode styles */
+[data-theme="dark"] .song-preferences-table thead {
+  background-color: var(--pp-bg-tertiary);
+}

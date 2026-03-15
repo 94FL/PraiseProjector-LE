@@ -1,0 +1,13 @@
+.about-update-progress {
+  height: 6px;
+  background-color: #dee2e6;
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 20rem;
+}
+
+.about-update-progress-bar {
+  height: 100%;
+  background-color: #198754;
+  transition: width 0.3s ease;
+}

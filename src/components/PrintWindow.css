@@ -1,0 +1,176 @@
+/* PrintWindow styles */
+.print-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background-color: #f8f9fa;
+}
+
+/* ── Compact single-line toolbar ── */
+.print-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #dee2e6;
+  gap: 12px;
+  z-index: 10;
+}
+
+.print-toolbar-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.print-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.print-toolbar-actions .form-check {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* ── Settings button + dropdown wrapper ── */
+.print-toolbar-settings-wrapper {
+  position: relative;
+}
+
+/* ── Settings dropdown panel ── */
+.print-settings-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 280px;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 8px 0;
+  z-index: 100;
+}
+
+.print-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  gap: 12px;
+}
+
+.print-settings-item:hover {
+  background-color: #f0f0f0;
+}
+
+.print-settings-item .form-check {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.print-settings-item > label {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.print-settings-item .form-control {
+  width: auto;
+  min-width: 110px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+}
+
+/* ── Editor area ── */
+.print-editor-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: white;
+}
+
+.print-editor-area .chordpro-editor-container {
+  height: 100%;
+  background-color: #ffffff;
+}
+
+.print-editor-area .wysiwyg-host {
+  background-color: #ffffff;
+}
+
+/* Print media - hide toolbar, show only editor */
+@media print {
+  .print-toolbar {
+    display: none !important;
+  }
+
+  .print-window {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .print-editor-area {
+    overflow: visible !important;
+    flex: none !important;
+    height: auto !important;
+  }
+
+  /* Unconstrain the entire ChordProEditor container chain so the canvas
+     is not clipped to the viewport height during printing. */
+  .print-editor-area .chordpro-editor-container,
+  .print-editor-area .chordpro-editor-container > .tab-content,
+  .print-editor-area .chordpro-editor-container .tab-pane,
+  .print-editor-area .wysiwyg-tab-content,
+  .print-editor-area .wysiwyg-host,
+  .print-editor-area .editor-panel-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+
+  /* Let the canvas itself dictate its natural size */
+  .print-editor-area .wysiwyg-host canvas {
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Reset some bootstrap stuff for print */
+  body {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Dark mode support */
+[data-theme="dark"] .print-window {
+  background-color: var(--pp-bg-secondary, #1e1e1e);
+}
+
+[data-theme="dark"] .print-toolbar {
+  background-color: var(--pp-bg-primary, #252526);
+  border-bottom-color: var(--pp-border-color, #3c3c3c);
+  color: var(--pp-text-color, #cccccc);
+}
+
+[data-theme="dark"] .print-settings-panel {
+  background-color: var(--pp-bg-primary, #252526);
+  border-color: var(--pp-border-color, #3c3c3c);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .print-settings-item:hover {
+  background-color: var(--pp-bg-secondary, #2a2d2e);
+}
+
+[data-theme="dark"] .print-settings-item label,
+[data-theme="dark"] .print-toolbar-title {
+  color: var(--pp-text-color, #cccccc);
+}

@@ -1,0 +1,466 @@
+/* 
+  Override Bootstrap modal-backdrop opacity to prevent semi-transparency.
+  Bootstrap's default .modal-backdrop.show uses opacity which makes content transparent.
+  By setting background-color with RGBA and forcing opacity to 1, we ensure the backdrop
+  is semi-transparent but the modal content is fully opaque.
+*/
+.leader-merge-dialog-backdrop.modal-backdrop.show {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+  z-index: 1060;
+}
+
+/* Ensure the modal itself appears above its own backdrop */
+.leader-merge-dialog-backdrop .modal {
+  z-index: 1061;
+}
+
+/* Modal body layout */
+.leader-merge-body {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* Quick action buttons */
+.merge-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--pp-border-color, #dee2e6);
+}
+
+/* Merge sections */
+.merge-section {
+  border: 1px solid var(--pp-border-color, #dee2e6);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--pp-section-bg, #f8f9fa);
+}
+
+.merge-section-title {
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--pp-heading-color, inherit);
+}
+
+/* Merge table container */
+.merge-table-container {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--pp-border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--pp-bg-color, #fff);
+}
+
+/* Merge table styling */
+.merge-table {
+  margin-bottom: 0;
+  font-size: 0.85rem;
+}
+
+.merge-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--pp-table-header-bg, #e9ecef);
+}
+
+.merge-table thead th {
+  padding: 8px 6px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-bottom: 2px solid var(--pp-border-color, #dee2e6);
+}
+
+/* Column header with sub-headers for preference values */
+.merge-table thead th.col-values {
+  text-align: center;
+}
+
+.merge-table thead th.col-values span {
+  display: inline-block;
+  min-width: 45px;
+  text-align: center;
+  margin: 0 2px;
+  font-size: 0.65rem;
+}
+
+.merge-table tbody td {
+  padding: 6px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--pp-border-color-light, #f0f0f0);
+}
+
+/* Column sizing */
+.col-song {
+  width: 160px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-expand {
+  width: 30px;
+  text-align: center;
+  padding: 4px !important;
+}
+
+.col-date {
+  width: 100px;
+  white-space: nowrap;
+}
+
+.col-source {
+  width: 40px;
+  text-align: center;
+}
+
+.col-values {
+  min-width: 200px;
+}
+
+.col-playlist-value {
+  min-width: 80px;
+}
+
+/* Merge row hover */
+.merge-row:hover {
+  background: var(--pp-hover-bg, rgba(0, 123, 255, 0.05));
+}
+
+/* Source selection button */
+.merge-source-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.8rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.merge-source-btn.btn-primary {
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.3);
+}
+
+/* Preference/Playlist value display */
+.merge-value {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  transition: opacity 0.2s ease;
+}
+
+.merge-value.selected {
+  opacity: 1;
+  font-weight: 500;
+}
+
+.merge-value.unselected {
+  opacity: 0.4;
+  color: var(--pp-muted-text, #6c757d);
+}
+
+/* Individual preference fields */
+.pref-title {
+  min-width: 60px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pref-transpose,
+.pref-capo,
+.pref-mode,
+.pref-instr {
+  min-width: 35px;
+  text-align: center;
+}
+
+/* Dark mode styles */
+[data-theme="dark"] .leader-merge-dialog-backdrop .modal-content {
+  background: var(--pp-modal-bg);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .merge-section {
+  border-color: var(--pp-border-color);
+  background: var(--pp-section-bg, #2a2a2a);
+}
+
+[data-theme="dark"] .merge-table-container {
+  background: var(--pp-bg-color, #1e1e1e);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .merge-table thead {
+  background: var(--pp-table-header-bg, #333);
+}
+
+[data-theme="dark"] .merge-table thead th {
+  border-bottom-color: var(--pp-border-color);
+  color: var(--pp-text-color);
+}
+
+[data-theme="dark"] .merge-table tbody td {
+  border-bottom-color: var(--pp-border-color-light, #333);
+}
+
+[data-theme="dark"] .merge-row:hover {
+  background: var(--pp-hover-bg, rgba(255, 255, 255, 0.05));
+}
+
+[data-theme="dark"] .merge-quick-actions {
+  border-bottom-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .merge-value.unselected {
+  color: var(--pp-muted-text, #888);
+}
+
+/* Expand button in table */
+.playlist-expand-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+  color: var(--pp-text-color, inherit);
+  text-decoration: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playlist-expand-btn:hover {
+  color: var(--bs-primary, #0d6efd);
+}
+
+/* Expanded playlist row */
+.playlist-expanded-row {
+  background: var(--pp-section-bg, #f8f9fa);
+}
+
+.playlist-expanded-row:hover {
+  background: var(--pp-section-bg, #f8f9fa) !important;
+}
+
+.playlist-expanded-cell {
+  padding: 8px !important;
+}
+
+/* Side-by-side playlist comparison */
+.playlist-comparison {
+  width: 100%;
+}
+
+.playlist-comparison-header {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.playlist-comparison-side {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: var(--pp-heading-color, inherit);
+  text-align: center;
+  padding: 4px;
+  background: var(--pp-table-header-bg, #e9ecef);
+  border-radius: 4px;
+}
+
+.playlist-comparison-body {
+  display: flex;
+  gap: 16px;
+}
+
+.playlist-comparison-panel {
+  flex: 1;
+  background: var(--pp-bg-color, #fff);
+  border: 1px solid var(--pp-border-color-light, #e9ecef);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.playlist-comparison-panel.unselected {
+  opacity: 0.5;
+}
+
+.playlist-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--pp-muted-text, #6c757d);
+}
+
+.playlist-entries-table {
+  font-size: 0.8rem;
+  width: 100%;
+}
+
+.playlist-entries-table thead th {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  padding: 4px 6px;
+  background: var(--pp-table-header-bg, #e9ecef);
+  border-bottom: 1px solid var(--pp-border-color, #dee2e6);
+}
+
+.playlist-entries-table tbody td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--pp-border-color-light, #f0f0f0);
+}
+
+.col-entry-num {
+  width: 30px;
+  text-align: center;
+}
+
+.col-entry-title {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-entry-transpose,
+.col-entry-capo,
+.col-entry-instr {
+  width: 40px;
+  text-align: center;
+}
+
+/* Playlist entry diff status colors */
+/* Item doesn't exist on the other side - red/pink */
+.playlist-entries-table tbody tr.entry-diff-not-exists,
+.playlist-entries-table tbody tr.entry-diff-not-exists > td {
+  background-color: rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Item exists but at different position - yellow/amber */
+.playlist-entries-table tbody tr.entry-diff-different-position,
+.playlist-entries-table tbody tr.entry-diff-different-position > td {
+  background-color: rgba(255, 193, 7, 0.3) !important;
+}
+
+/* Item at same position but with different settings - blue/cyan */
+.playlist-entries-table tbody tr.entry-diff-different-settings,
+.playlist-entries-table tbody tr.entry-diff-different-settings > td {
+  background-color: rgba(13, 202, 240, 0.25) !important;
+}
+
+/* Field-level difference - red text for individual fields that differ */
+.playlist-entries-table td.field-diff {
+  color: #dc3545 !important;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .playlist-entries-table td.field-diff {
+  color: #ff6b7a !important;
+}
+
+/* Schedule table needs more height for expanded content */
+.schedule-table-container {
+  max-height: 400px;
+}
+
+/* Dark mode for expanded playlists */
+[data-theme="dark"] .playlist-expand-btn {
+  color: var(--pp-text-color, #e0e0e0);
+}
+
+[data-theme="dark"] .playlist-expanded-row {
+  background: var(--pp-section-bg, #2a2a2a);
+}
+
+[data-theme="dark"] .playlist-expanded-row:hover {
+  background: var(--pp-section-bg, #2a2a2a) !important;
+}
+
+[data-theme="dark"] .playlist-comparison-side {
+  background: var(--pp-table-header-bg, #333);
+}
+
+[data-theme="dark"] .playlist-comparison-panel {
+  background: var(--pp-bg-color, #1e1e1e);
+  border-color: var(--pp-border-color, #444);
+}
+
+[data-theme="dark"] .playlist-entries-table thead th {
+  background: var(--pp-table-header-bg, #333);
+  border-bottom-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .playlist-entries-table tbody td {
+  border-bottom-color: var(--pp-border-color-light, #333);
+}
+
+/* Dark mode diff colors - slightly adjusted for visibility */
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-not-exists,
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-not-exists > td {
+  background-color: rgba(220, 53, 69, 0.35) !important;
+}
+
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-different-position,
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-different-position > td {
+  background-color: rgba(255, 193, 7, 0.35) !important;
+}
+
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-different-settings,
+[data-theme="dark"] .playlist-entries-table tbody tr.entry-diff-different-settings > td {
+  background-color: rgba(13, 202, 240, 0.35) !important;
+}
+
+/* Hover popup for playlist differences */
+.playlist-hover-popup {
+  position: fixed;
+  z-index: 1100;
+  background: white;
+  border: 1px solid var(--pp-border-color, #dee2e6);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  max-width: 600px;
+  pointer-events: auto;
+}
+
+.playlist-comparison-popup {
+  /* No header padding in popup mode */
+}
+
+.playlist-comparison-popup .playlist-comparison-header {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.playlist-comparison-popup .playlist-comparison-panel {
+  min-width: 200px;
+}
+
+.playlist-comparison-popup .playlist-entries-table {
+  font-size: 0.8rem;
+}
+
+.playlist-comparison-popup .playlist-entries-table th,
+.playlist-comparison-popup .playlist-entries-table td {
+  padding: 2px 4px;
+}
+
+.more-rows-indicator td {
+  font-style: italic;
+  padding: 4px !important;
+}
+
+[data-theme="dark"] .playlist-hover-popup {
+  background: var(--pp-bg-color, #1e1e1e);
+  border-color: var(--pp-border-color, #444);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}

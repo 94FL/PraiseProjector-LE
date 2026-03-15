@@ -1,0 +1,249 @@
+import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron";
+import { Display } from "../common/pp-types";
+import { Settings } from "../src/types";
+import { ApiResponse } from "../common/ipc-types";
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  // Window bounds management
+  getWindowBounds: () => ipcRenderer.invoke("get-window-bounds"),
+  setWindowBounds: (bounds: { x: number; y: number; width: number; height: number }) => ipcRenderer.invoke("set-window-bounds", bounds),
+
+  // Display/Monitor management
+  getAllDisplays: () => ipcRenderer.invoke("get-all-displays"),
+  showDisplayWindow: (displayId: string, imageData: string) => ipcRenderer.invoke("show-display-window", displayId, imageData),
+  hideDisplayWindow: () => ipcRenderer.invoke("hide-display-window"),
+  isDisplayWindowOpen: () => ipcRenderer.invoke("is-display-window-open"),
+
+  // Playlist file operations
+  savePlaylistFile: (content: string) => ipcRenderer.invoke("save-playlist-file", content),
+  loadPlaylistFile: () => ipcRenderer.invoke("load-playlist-file"),
+
+  // Proxy operations
+  proxyGet: (baseUrl: string, path: string, headers?: Record<string, string>) => ipcRenderer.invoke("proxy-get", baseUrl, path, headers),
+  proxyPost: (baseUrl: string, path: string, data: unknown, headers?: Record<string, string>) =>
+    ipcRenderer.invoke("proxy-post", baseUrl, path, data, headers),
+
+  // Current display state management
+  setCurrentDisplay: (display: Display) => ipcRenderer.invoke("set-current-display", display),
+  getMainWindowDisplayId: () => ipcRenderer.invoke("get-main-window-display-id"),
+
+  // General WebServer API request handler
+  onWebserverApiRequest: (
+    callback: (apiRequest: { method: string; path: string; query: Record<string, unknown>; body: unknown; headers: Record<string, unknown> }) => void
+  ) => {
+    const subscription = (
+      _event: IpcRendererEvent,
+      apiRequest: { method: string; path: string; query: Record<string, unknown>; body: unknown; headers: Record<string, unknown> }
+    ) => callback(apiRequest);
+    ipcRenderer.on("webserver-api-request", subscription);
+    return () => {
+      ipcRenderer.removeListener("webserver-api-request", subscription);
+    };
+  },
+
+  sendWebserverApiResponse: (response: ApiResponse) => {
+    ipcRenderer.send("webserver-api-response", response);
+  },
+
+  // Settings sync - frontend pushes settings to backend
+  syncSettings: (settings: Settings) => {
+    ipcRenderer.send("sync-settings", settings);
+  },
+
+  // Sync leader name (for UDP offer - C# uses cmbLeader.Text which is the name, not ID)
+  syncLeaderName: (leaderName: string) => {
+    ipcRenderer.send("sync-leader-name", leaderName);
+  },
+
+  // Net display image update (matching C# SetImage - sends display PNG to webserver)
+  setNetDisplayImage: (pngDataUrl: string | null) => {
+    ipcRenderer.send("set-net-display-image", pngDataUrl);
+  },
+
+  // Get connected clients from webserver (for admin client selection)
+  getConnectedClients: () => ipcRenderer.invoke("get-connected-clients"),
+
+  // Highlight access control
+  onHighlightAccessRequest: (callback: (data: { clientId: string }) => void) => {
+    const subscription = (_event: IpcRendererEvent, data: { clientId: string }) => callback(data);
+    ipcRenderer.on("highlight-access-request", subscription);
+    return () => {
+      ipcRenderer.removeListener("highlight-access-request", subscription);
+    };
+  },
+
+  onHighlightChanged: (callback: (data: { line: number }) => void) => {
+    const subscription = (_event: IpcRendererEvent, data: { line: number }) => callback(data);
+    ipcRenderer.on("highlight-changed", subscription);
+    return () => {
+      ipcRenderer.removeListener("highlight-changed", subscription);
+    };
+  },
+
+  // Remote display/song update from web clients (matching C# SongChanged/PlayListItemChanged)
+  onRemoteDisplayUpdate: (
+    callback: (data: {
+      command: "song_update" | "display_update";
+      id: string;
+      from: number;
+      to: number;
+      transpose: number;
+      capo: number;
+      instructions: string;
+      title: string;
+      playlist: string;
+    }) => void
+  ) => {
+    const subscription = (
+      _event: IpcRendererEvent,
+      data: {
+        command: "song_update" | "display_update";
+        id: string;
+        from: number;
+        to: number;
+        transpose: number;
+        capo: number;
+        instructions: string;
+        title: string;
+        playlist: string;
+      }
+    ) => callback(data);
+    ipcRenderer.on("remote-display-update", subscription);
+    return () => {
+      ipcRenderer.removeListener("remote-display-update", subscription);
+    };
+  },
+
+  respondHighlightAccess: (clientId: string, grant: boolean) => {
+    ipcRenderer.send("respond-highlight-access", { clientId, grant });
+  },
+
+  getRemoteHighlightController: () => ipcRenderer.invoke("get-remote-highlight-controller"),
+
+  // P2P session scanning (unified UDP + Bluetooth)
+  // Methods maintain "udp" prefix for backwards compatibility
+  udpGetBroadcastAddress: () => ipcRenderer.invoke("udp-get-broadcast-address"),
+  udpScanSessions: (broadcastAddress?: string) => ipcRenderer.invoke("udp-scan-sessions", broadcastAddress),
+  udpGetDiscoveredSessions: () => ipcRenderer.invoke("udp-get-discovered-sessions"),
+
+  // P2P watch mode - supports both prefixed endpoint IDs and legacy parameters
+  udpStartWatching: (deviceIdOrEndpoint: string, hostId?: string, address?: string, port?: number) =>
+    ipcRenderer.invoke("udp-start-watching", deviceIdOrEndpoint, hostId, address, port),
+  udpStopWatching: () => ipcRenderer.invoke("udp-stop-watching"),
+  onUdpDisplayUpdate: (callback: (display: unknown) => void) => {
+    const subscription = (_event: IpcRendererEvent, display: unknown) => callback(display);
+    ipcRenderer.on("udp-display-update", subscription);
+    return () => {
+      ipcRenderer.removeListener("udp-display-update", subscription);
+    };
+  },
+  onUdpSessionEnded: (callback: () => void) => {
+    const subscription = () => callback();
+    ipcRenderer.on("udp-session-ended", subscription);
+    return () => {
+      ipcRenderer.removeListener("udp-session-ended", subscription);
+    };
+  },
+
+  // P2P transport status
+  p2pGetStatus: () => ipcRenderer.invoke("p2p-get-status"),
+
+  // Bluetooth settings helper (opens OS Bluetooth settings for pairing)
+  openBluetoothSettings: () => ipcRenderer.invoke("open-bluetooth-settings"),
+
+  onRemoteHighlightControllerChanged: (callback: (data: { clientId: string }) => void) => {
+    const subscription = (_event: IpcRendererEvent, data: { clientId: string }) => callback(data);
+    ipcRenderer.on("remote-highlight-controller-changed", subscription);
+    return () => {
+      ipcRenderer.removeListener("remote-highlight-controller-changed", subscription);
+    };
+  },
+
+  // Auto-updater
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  downloadUpdate: () => ipcRenderer.invoke("download-update"),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
+  onUpdateAvailable: (callback: (info: { version: string }) => void) => {
+    const subscription = (_event: IpcRendererEvent, info: { version: string }) => callback(info);
+    ipcRenderer.on("update-available", subscription);
+    return () => {
+      ipcRenderer.removeListener("update-available", subscription);
+    };
+  },
+  onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => {
+    const subscription = (_event: IpcRendererEvent, progress: { percent: number }) => callback(progress);
+    ipcRenderer.on("update-download-progress", subscription);
+    return () => {
+      ipcRenderer.removeListener("update-download-progress", subscription);
+    };
+  },
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
+    const subscription = (_event: IpcRendererEvent, info: { version: string }) => callback(info);
+    ipcRenderer.on("update-downloaded", subscription);
+    return () => {
+      ipcRenderer.removeListener("update-downloaded", subscription);
+    };
+  },
+
+  // Image folder management
+  selectFolder: () => ipcRenderer.invoke("select-folder"),
+  listImagesInFolder: (folderPath: string) => ipcRenderer.invoke("list-images-in-folder", folderPath),
+  readImageAsDataUrl: (imagePath: string) => ipcRenderer.invoke("read-image-as-data-url", imagePath),
+
+  // BLE Peripheral mode (requires @abandonware/bleno module)
+  // Allows Android devices to discover and connect to this computer
+  blePeripheral: {
+    isAvailable: () => ipcRenderer.invoke("ble-peripheral:is-available"),
+    getState: () => ipcRenderer.invoke("ble-peripheral:get-state"),
+    startAdvertising: (name?: string) => ipcRenderer.invoke("ble-peripheral:start-advertising", name),
+    stopAdvertising: () => ipcRenderer.invoke("ble-peripheral:stop-advertising"),
+    send: (deviceId: string, message: unknown) => ipcRenderer.invoke("ble-peripheral:send", deviceId, message),
+    broadcast: (message: unknown) => ipcRenderer.invoke("ble-peripheral:broadcast", message),
+    getConnectedDevices: () => ipcRenderer.invoke("ble-peripheral:get-connected-devices"),
+    onConnection: (callback: (deviceId: string, connected: boolean) => void) => {
+      const subscription = (_event: IpcRendererEvent, deviceId: string, connected: boolean) => callback(deviceId, connected);
+      ipcRenderer.on("ble-peripheral:connection", subscription);
+      return () => {
+        ipcRenderer.removeListener("ble-peripheral:connection", subscription);
+      };
+    },
+    onMessage: (callback: (deviceId: string, message: unknown) => void) => {
+      const subscription = (_event: IpcRendererEvent, deviceId: string, message: unknown) => callback(deviceId, message);
+      ipcRenderer.on("ble-peripheral:message", subscription);
+      return () => {
+        ipcRenderer.removeListener("ble-peripheral:message", subscription);
+      };
+    },
+  },
+
+  // Cloud API host from proxy-config.json (main process)
+  getCloudApiHost: () => ipcRenderer.invoke("get-cloud-api-host") as Promise<string>,
+
+  // Network addresses for domain name combobox
+  getNetworkAddresses: () => ipcRenderer.invoke("get-network-addresses"),
+  getHostname: () => ipcRenderer.invoke("get-hostname") as Promise<string>,
+
+  // UFW firewall management (Linux only)
+  ufwManage: (action: "status" | "apply" | "remove", port?: number) => ipcRenderer.invoke("ufw-manage", action, port),
+
+  // Backend logging access
+  logs: {
+    get: () => ipcRenderer.invoke("logs:get"),
+    clear: () => ipcRenderer.invoke("logs:clear"),
+    openWindow: () => ipcRenderer.invoke("logs:open-window"),
+    onEntry: (callback: (entry: { timestamp: number; level: string; message: string; args?: unknown[]; source?: string }) => void) => {
+      const subscription = (
+        _event: IpcRendererEvent,
+        entry: { timestamp: number; level: string; message: string; args?: unknown[]; source?: string }
+      ) => callback(entry);
+      ipcRenderer.on("logs:entry", subscription);
+      return () => {
+        ipcRenderer.removeListener("logs:entry", subscription);
+      };
+    },
+    sendEntry: (entry: { timestamp: number; level: string; message: string; args?: unknown[] }) => {
+      ipcRenderer.send("logs:frontend-entry", entry);
+    },
+  },
+});

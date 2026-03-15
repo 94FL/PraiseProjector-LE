@@ -1,0 +1,52 @@
+{
+    "name": "Praise\u200BProjector",
+    "short_name": "Praise\u200BProj",
+    "start_url": "/app/main.html",
+    "id": "/app/main.html",
+    "scope": "/app/",
+    "display": "fullscreen",
+    "background_color": "black",
+    "theme_color": "black",
+    "icons": [
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "72x72"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "96x96"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "128x128"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "144x144"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "152x152"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "192x192"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "384x384"
+        },
+        {
+            "src": "/app/images/pp.svg",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ]
+}
