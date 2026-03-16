@@ -98,6 +98,7 @@
     "appId": "com.praiseprojector.electron",
     "productName": "PraiseProjector",
     "icon": "dist/build/icon",
+    "afterPack": "./scripts/after-pack-linux-no-sandbox.cjs",
     "directories": {
       "output": "dist/executables",
       "buildResources": "dist/build"
@@ -154,7 +155,11 @@
     },
     "linux": {
       "icon": "dist/build/icon.png",
-      "target": "AppImage"
+      "target": "AppImage",
+      "executableArgs": [
+        "--no-sandbox",
+        "--disable-gpu-sandbox"
+      ]
     }
   }
 }

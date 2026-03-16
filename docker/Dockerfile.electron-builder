@@ -1,0 +1,45 @@
+FROM node:20-bookworm
+
+# Install system dependencies needed for building Electron apps and AppImages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3 \
+    pkg-config \
+    libx11-dev \
+    libxext-dev \
+    libxrender-dev \
+    libxtst-dev \
+    libxkbfile-dev \
+    libgconf-2-4 \
+    libappindicator1 \
+    libdbus-1-dev \
+    libgdk-pixbuf2.0-dev \
+    libglib2.0-dev \
+    libfuse2 \
+    git \
+    curl \
+    wget \
+    zip \
+    unzip \
+    xclip \
+    libxss1 \
+    libgbm1 \
+    desktop-file-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wine and ia32 libs for cross-compilation (optional, for Windows builds)
+# RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y wine wine32:i386
+
+# Set up environment for electron-builder
+ENV ELECTRON_CACHE=/root/.cache/electron
+ENV ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder
+ENV ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true
+ENV NODE_OPTIONS=--max_old_space_size=4096
+
+# Create cache directories
+RUN mkdir -p $ELECTRON_CACHE $ELECTRON_BUILDER_CACHE
+
+WORKDIR /project
+
+# Default command
+CMD ["/bin/bash"]
