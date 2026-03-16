@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Icon, IconType } from "../services/IconService";
 import { useLeader } from "../contexts/LeaderContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useTooltips } from "../localization/TooltipContext";
+import { cloudApi } from "../services/cloudApi";
 import AuthDialog from "./AuthDialog";
+
+const PENDING_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour between server queries
+const PENDING_POLL_TICK_MS = 1000; // check every second whether it's time to query
 
 interface UserPanelProps {
   onOpenLeaderSettings?: (leaderId: string | null) => void;
@@ -33,7 +37,9 @@ const UserPanel: React.FC<UserPanelProps> = ({
   const { tt } = useTooltips();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const [pendingSongCount, setPendingSongCount] = useState(0);
   const syncMenuRef = useRef<HTMLDivElement>(null);
+  const lastPendingCheckRef = useRef(0);
   // Tracks which action to perform after successful login (null = none).
   const pendingActionAfterLoginRef = useRef<(() => void) | null>(null);
   // Keep refs to the latest callbacks so deferred calls after login
@@ -42,6 +48,43 @@ const UserPanel: React.FC<UserPanelProps> = ({
   onSyncClickRef.current = onSyncClick;
   const onSongCheckClickRef = useRef(onSongCheckClick);
   onSongCheckClickRef.current = onSongCheckClick;
+
+  // Periodic pending song count polling (matching praiseprojector.ts pattern:
+  // check every second whether enough time has passed, query server every hour)
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const count = await cloudApi.fetchPendingSongsCount();
+      setPendingSongCount(count);
+    } catch {
+      // Silently ignore — server may be unreachable
+    }
+    lastPendingCheckRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      if (!isGuest && Date.now() - lastPendingCheckRef.current >= PENDING_CHECK_INTERVAL_MS) {
+        fetchPendingCount();
+      }
+    }, PENDING_POLL_TICK_MS);
+    // Also check immediately on mount / auth change
+    if (!isGuest) {
+      fetchPendingCount();
+    } else {
+      setPendingSongCount(0);
+      lastPendingCheckRef.current = 0;
+    }
+    return () => clearInterval(tick);
+  }, [isGuest, fetchPendingCount]);
+
+  // Listen for external refresh requests (e.g. after SongCheckDialog processes songs)
+  useEffect(() => {
+    const handleRefresh = () => {
+      lastPendingCheckRef.current = 0; // force next tick to query
+    };
+    window.addEventListener("pp-pending-songs-changed", handleRefresh);
+    return () => window.removeEventListener("pp-pending-songs-changed", handleRefresh);
+  }, []);
 
   // Register callback for auto-selecting leader after login
   useEffect(() => {
@@ -148,12 +191,13 @@ const UserPanel: React.FC<UserPanelProps> = ({
               <Icon type={IconType.SYNC} />
             </button>
             <button
-              className="btn btn-light dropdown-toggle-split sync-menu-toggle"
+              className="btn btn-light dropdown-toggle-split sync-menu-toggle position-relative"
               aria-label="Sync Menu"
               title={t("SyncMenu")}
               onClick={() => setShowSyncMenu(!showSyncMenu)}
             >
               <span className="sync-menu-indicator">▾</span>
+              {pendingSongCount > 0 && <span className="update-dot update-dot-abs" />}
             </button>
             {showSyncMenu && (
               <div className="dropdown-menu show sync-dropdown-menu">
@@ -169,13 +213,18 @@ const UserPanel: React.FC<UserPanelProps> = ({
                 {onSongCheckClick && !isGuest && (
                   <button
                     type="button"
-                    className="dropdown-item"
+                    className="dropdown-item d-flex align-items-center justify-content-between"
                     onClick={() => {
                       setShowSyncMenu(false);
                       onSongCheckClick();
                     }}
                   >
                     {t("SongCheckTitle")}
+                    {pendingSongCount > 0 && (
+                      <span className="badge bg-danger rounded-pill ms-2">
+                        {pendingSongCount > 99 ? "99+" : pendingSongCount}
+                      </span>
+                    )}
                   </button>
                 )}
                 <button

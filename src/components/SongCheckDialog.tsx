@@ -118,6 +118,8 @@ const SongCheckDialog: React.FC<SongCheckDialogProps> = ({ onClose }) => {
       } else {
         setSelectedEntry(null);
         await fetchPendingSongs();
+        // Notify UserPanel to refresh its pending count badge
+        window.dispatchEvent(new Event("pp-pending-songs-changed"));
       }
     } catch (error) {
       showMessage(t("Error"), error instanceof Error ? error.message : String(error));
