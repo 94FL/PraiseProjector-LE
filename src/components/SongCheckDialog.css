@@ -1,0 +1,41 @@
+/*
+  Override Bootstrap modal-backdrop opacity to prevent semi-transparency.
+  Bootstrap's default .modal-backdrop.show uses opacity which makes content transparent.
+  By setting background-color with RGBA and forcing opacity to 1, we ensure the backdrop
+  is semi-transparent but the modal content is fully opaque.
+*/
+.song-check-backdrop.modal-backdrop.show {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+  z-index: 1050;
+}
+
+.song-check-backdrop .modal {
+  z-index: 1051;
+}
+
+.song-check-table {
+  margin-bottom: 0;
+}
+
+.song-check-row {
+  cursor: pointer;
+}
+
+.song-check-row td:first-child {
+  text-align: center;
+  width: 3rem;
+}
+
+/* ========================================
+   DARK MODE OVERRIDES - SongCheckDialog.css
+   ======================================== */
+
+[data-theme="dark"] .song-check-backdrop .modal-content {
+  background-color: var(--pp-panel-bg, #212529);
+  color: var(--pp-text-color, #e0e0e0);
+}
+
+[data-theme="dark"] .song-check-table {
+  color: var(--pp-text-color, #e0e0e0);
+}

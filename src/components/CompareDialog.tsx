@@ -10,15 +10,24 @@ export interface ImportDecision {
   groupWithSong?: Song; // the song to group with (for "import-and-group")
 }
 
+// Result type for SongCheck mode decisions
+export type SongCheckDecision = "approve" | "reject" | "revoke";
+
 interface CompareDialogProps {
   originalSong: Song | null;
   songsToCompare: Song[];
-  mode: "ViewOnly" | "Verify" | "Import" | "Conflict" | "History";
+  mode: "ViewOnly" | "Verify" | "Import" | "Conflict" | "History" | "SongCheck";
   onClose: (mergedSong?: Song, importDecision?: ImportDecision) => void;
   leftLabel?: string;
   rightLabel?: string;
   leftButtonLabel?: string;
   rightButtonLabel?: string;
+  /** SongCheck mode: callback when user approves/rejects/revokes */
+  onSongCheckDecision?: (decision: SongCheckDecision) => void;
+  /** SongCheck mode: if true, reject button shows "Revoke" instead */
+  songCheckIsOwnUpload?: boolean;
+  /** SongCheck mode: if true, the song was previously rejected */
+  songCheckWasRejected?: boolean;
 }
 
 // Helper to get version display text from song's Change property
@@ -45,6 +54,9 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
   rightLabel,
   leftButtonLabel,
   rightButtonLabel,
+  onSongCheckDecision,
+  songCheckIsOwnUpload,
+  songCheckWasRejected,
 }) => {
   const { t } = useLocalization();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -58,6 +70,7 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
   // Left panel shows the version at leftVersionIndex, right shows rightVersionIndex
   const isHistoryMode = mode === "History";
   const isImportMode = mode === "Import";
+  const isSongCheckMode = mode === "SongCheck";
 
   // Build version list for History mode dropdowns
   const buildVersionList = (): { label: string; song: Song }[] => {
@@ -173,7 +186,16 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
           {isHistoryMode ? (
             renderHistoryVersionSelector(leftVersionIndex, setLeftVersionIndex, t("LeftVersion"))
           ) : (
-            <label>{leftLabel || (isImportMode ? t("SongToImport") : mode === "Conflict" ? t("LocallyModifiedVersion") : t("ActualSong"))}</label>
+            <label>
+              {leftLabel ||
+                (isSongCheckMode
+                  ? t("SongCheckCurrentVersion")
+                  : isImportMode
+                    ? t("SongToImport")
+                    : mode === "Conflict"
+                      ? t("LocallyModifiedVersion")
+                      : t("ActualSong"))}
+            </label>
           )}
           <ChordProEditor
             key={`left-${isHistoryMode ? leftVersionIndex : currentIndex}`}
@@ -207,7 +229,14 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
             renderHistoryVersionSelector(rightVersionIndex, setRightVersionIndex, t("RightVersion"))
           ) : (
             <label>
-              {rightLabel || (isImportMode ? t("SimilarSongInDatabase") : mode === "Conflict" ? t("NewVersionOnServer") : t("SimilarSongInDatabase"))}
+              {rightLabel ||
+                (isSongCheckMode
+                  ? t("SongCheckProposedVersion")
+                  : isImportMode
+                    ? t("SimilarSongInDatabase")
+                    : mode === "Conflict"
+                      ? t("NewVersionOnServer")
+                      : t("SimilarSongInDatabase"))}
             </label>
           )}
           <ChordProEditor
@@ -226,8 +255,8 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
     );
   };
 
-  // In History mode, hide prev/next buttons; in Import mode show them for navigating similar songs
-  const showNavButtons = !isHistoryMode;
+  // In History and SongCheck modes, hide prev/next buttons; in Import mode show them for navigating similar songs
+  const showNavButtons = !isHistoryMode && !isSongCheckMode;
 
   return (
     <div className="modal-backdrop show compare-dialog-backdrop">
@@ -235,7 +264,9 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
         <div className="modal-dialog modal-xl">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">{isHistoryMode ? t("SongHistory") : isImportMode ? t("ImportSong") : t("CompareSongs")}</h5>
+              <h5 className="modal-title">
+                {isSongCheckMode ? t("SongCheckTitle") : isHistoryMode ? t("SongHistory") : isImportMode ? t("ImportSong") : t("CompareSongs")}
+              </h5>
               <button type="button" className="btn-close" aria-label="Close" onClick={() => onClose()}></button>
             </div>
             <div className="modal-body">{renderContent()}</div>
@@ -260,6 +291,20 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
                   </button>
                   <button type="button" className="btn btn-success" onClick={handleImportAndGroup} disabled={songsToCompare.length === 0}>
                     {t("ImportAndGroup")}
+                  </button>
+                </>
+              )}
+              {isSongCheckMode && onSongCheckDecision && (
+                <>
+                  <button type="button" className="btn btn-success" onClick={() => onSongCheckDecision(songCheckWasRejected ? "approve" : "approve")}>
+                    {songCheckWasRejected ? t("SongCheckApprove") : t("SongCheckApprove")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => onSongCheckDecision(songCheckIsOwnUpload || songCheckWasRejected ? "revoke" : "reject")}
+                  >
+                    {songCheckIsOwnUpload || songCheckWasRejected ? t("SongCheckRevoke") : t("SongCheckReject")}
                   </button>
                 </>
               )}

@@ -14,6 +14,7 @@ interface UserPanelProps {
   onImportDatabase?: () => void;
   onReplaceDatabase?: () => void;
   onSettingsClick?: () => void;
+  onSongCheckClick?: () => void;
 }
 
 const UserPanel: React.FC<UserPanelProps> = ({
@@ -23,6 +24,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
   onImportDatabase,
   onReplaceDatabase,
   onSettingsClick,
+  onSongCheckClick,
 }) => {
   const { selectedLeader, setSelectedLeaderId, allLeaders } = useLeader();
   const { isGuest, username, user, logout, login, setOnLoginSuccess } = useAuth();
@@ -32,7 +34,14 @@ const UserPanel: React.FC<UserPanelProps> = ({
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
-  const pendingSyncAfterLoginRef = useRef(false);
+  // Tracks which action to perform after successful login (null = none).
+  const pendingActionAfterLoginRef = useRef<(() => void) | null>(null);
+  // Keep refs to the latest callbacks so deferred calls after login
+  // always use the re-rendered callback with fresh auth state.
+  const onSyncClickRef = useRef(onSyncClick);
+  onSyncClickRef.current = onSyncClick;
+  const onSongCheckClickRef = useRef(onSongCheckClick);
+  onSongCheckClickRef.current = onSongCheckClick;
 
   // Register callback for auto-selecting leader after login
   useEffect(() => {
@@ -59,10 +68,17 @@ const UserPanel: React.FC<UserPanelProps> = ({
     };
   }, [showSyncMenu]);
 
-  // Allow other parts of the app to request the login dialog
+  // Allow other parts of the app to request the login dialog with an optional
+  // pending action to execute after successful login.
   useEffect(() => {
-    const handleOpenAuthDialog = () => {
-      pendingSyncAfterLoginRef.current = true;
+    const handleOpenAuthDialog = (e: Event) => {
+      const action = (e as CustomEvent).detail?.action;
+      if (action === "songCheck") {
+        pendingActionAfterLoginRef.current = () => onSongCheckClickRef.current?.();
+      } else {
+        // Default: sync
+        pendingActionAfterLoginRef.current = () => onSyncClickRef.current?.();
+      }
       setShowAuthDialog(true);
     };
 
@@ -85,9 +101,12 @@ const UserPanel: React.FC<UserPanelProps> = ({
     const success = await login(username, token || password);
     if (success) {
       setShowAuthDialog(false);
-      if (pendingSyncAfterLoginRef.current) {
-        pendingSyncAfterLoginRef.current = false;
-        onSyncClick?.();
+      if (pendingActionAfterLoginRef.current) {
+        const action = pendingActionAfterLoginRef.current;
+        pendingActionAfterLoginRef.current = null;
+        // Defer so React commits the auth state update first; the ref-based
+        // callbacks pick up the re-rendered version with fresh auth state.
+        setTimeout(() => action(), 0);
       }
     } else {
       showMessage(t("LoginFailed"), t("LoginFailedCheckCredentials"));
@@ -96,7 +115,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
 
   const handleLogout = async () => {
     await logout();
-    pendingSyncAfterLoginRef.current = false;
+    pendingActionAfterLoginRef.current = null;
     setShowAuthDialog(false);
   };
 
@@ -147,6 +166,18 @@ const UserPanel: React.FC<UserPanelProps> = ({
                 >
                   {t("MenuSyncDatabase")}
                 </button>
+                {onSongCheckClick && !isGuest && (
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setShowSyncMenu(false);
+                      onSongCheckClick();
+                    }}
+                  >
+                    {t("SongCheckTitle")}
+                  </button>
+                )}
                 <button
                   className="dropdown-item"
                   onClick={() => {
@@ -217,7 +248,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
         <AuthDialog
           onConfirm={handleAuthConfirm}
           onCancel={() => {
-            pendingSyncAfterLoginRef.current = false;
+            pendingActionAfterLoginRef.current = null;
             setShowAuthDialog(false);
           }}
           showOffline={true}

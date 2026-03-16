@@ -41,6 +41,7 @@ interface LeftPanelProps {
   onExportDatabase?: () => void;
   onImportDatabase?: () => void;
   onReplaceDatabase?: () => void;
+  onSongCheckClick?: () => void;
   onExternalFilesDropped?: (files: File[]) => void;
   // Named panel size props for persistence
   playlistPanelSize?: number;
@@ -75,6 +76,7 @@ const LeftPanel = forwardRef<LeftPanelMethods, LeftPanelProps>(
       onExportDatabase,
       onImportDatabase,
       onReplaceDatabase,
+      onSongCheckClick,
       onExternalFilesDropped,
       playlistPanelSize,
       songListPanelSize,
@@ -221,6 +223,7 @@ const LeftPanel = forwardRef<LeftPanelMethods, LeftPanelProps>(
           onExportDatabase={onExportDatabase}
           onImportDatabase={onImportDatabase}
           onReplaceDatabase={onReplaceDatabase}
+          onSongCheckClick={onSongCheckClick}
         />
         <div className="flex-grow-1 mt-2">
           <PanelGroup

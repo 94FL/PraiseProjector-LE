@@ -20,6 +20,7 @@ const SessionsForm = lazy(() => import("./components/SessionsForm"));
 const SongImporterWizard = lazy(() => import("./components/SongImporterWizard/SongImporterWizard").then((m) => ({ default: m.SongImporterWizard })));
 const LogViewer = lazy(() => import("./components/LogViewer"));
 const CompareDialog = lazy(() => import("./components/CompareDialog"));
+const SongCheckDialog = lazy(() => import("./components/SongCheckDialog"));
 
 import { Song } from "./classes/Song";
 import { PlaylistEntry } from "./classes/PlaylistEntry";
@@ -259,6 +260,7 @@ const AppContent: React.FC = () => {
   } | null>(null);
   const [showSessionsForm, setShowSessionsForm] = useState(false);
   const [showLogViewer, setShowLogViewer] = useState(false);
+  const [showSongCheck, setShowSongCheck] = useState(false);
   const [isImporting, setIsImporting] = useState(false); // Loading state for database import
   const [eulaAccepted, setEulaAccepted] = useState(() => localStorage.getItem("pp-eula-accepted") === EULA_DATE);
   const [showEulaView, setShowEulaView] = useState(false);
@@ -1383,6 +1385,15 @@ const AppContent: React.FC = () => {
     }
   }, [isEditing, canSaveSong, showConfirm, t, isAuthenticated, isGuest, checkAndSaveScheduledPlaylist]);
 
+  const handleSongCheckClick = useCallback(() => {
+    if (isGuest) return; // Song check not available for guests
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent("pp-open-auth-dialog", { detail: { action: "songCheck" } }));
+      return;
+    }
+    setShowSongCheck(true);
+  }, [isAuthenticated, isGuest]);
+
   // Watched display state for tracking changes (matching C# watchedDisplay field)
   const watchedDisplayRef = useRef<(Display & { message?: string }) | null>(null);
 
@@ -1816,6 +1827,7 @@ const AppContent: React.FC = () => {
                     onExportDatabase={handleExportDatabase}
                     onImportDatabase={handleImportDatabase}
                     onReplaceDatabase={handleReplaceDatabase}
+                    onSongCheckClick={handleSongCheckClick}
                     onExternalFilesDropped={handleSongTreeExternalFilesDropped}
                     selectedSong={editedSong}
                     disabled={isWatching}
@@ -1909,6 +1921,7 @@ const AppContent: React.FC = () => {
                       onExportDatabase={handleExportDatabase}
                       onImportDatabase={handleImportDatabase}
                       onReplaceDatabase={handleReplaceDatabase}
+                      onSongCheckClick={handleSongCheckClick}
                       onExternalFilesDropped={handleSongTreeExternalFilesDropped}
                       selectedSong={editedSong}
                       disabled={isWatching}
@@ -2093,6 +2106,17 @@ const AppContent: React.FC = () => {
               }
             >
               <LogViewer onClose={() => setShowLogViewer(false)} />
+            </Suspense>
+          )}
+          {showSongCheck && (
+            <Suspense
+              fallback={
+                <div className="loading-overlay">
+                  <div className="loading-spinner" />
+                </div>
+              }
+            >
+              <SongCheckDialog onClose={() => setShowSongCheck(false)} />
             </Suspense>
           )}
           {!eulaAccepted && (

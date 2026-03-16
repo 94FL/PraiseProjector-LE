@@ -1,7 +1,16 @@
 import * as t from "io-ts";
 import { Song } from "../classes/Song";
 import { decode } from "../../common/io-utils";
-import { Display, OnlineSessionEntry, PlaylistEntry, SessionResponse, SyncRequest, SyncResponse } from "../../common/pp-types";
+import {
+  Display,
+  OnlineSessionEntry,
+  PlaylistEntry,
+  PendingSongOperation,
+  SessionResponse,
+  SongDBPendingEntry,
+  SyncRequest,
+  SyncResponse,
+} from "../../common/pp-types";
 import {
   displayCodec,
   errorResponseCodec,
@@ -241,6 +250,27 @@ class CloudApiService {
       console.error("API", "Failed to fetch online sessions", error);
       return [];
     }
+  }
+
+  /**
+   * Fetch list of pending songs awaiting review
+   */
+  async fetchPendingSongs(): Promise<SongDBPendingEntry[]> {
+    return this.apiCall<SongDBPendingEntry[]>("/pending_songs");
+  }
+
+  /**
+   * Fetch count of pending songs awaiting review
+   */
+  async fetchPendingSongsCount(): Promise<number> {
+    return this.apiCall<number>("/pending_songs?c=1");
+  }
+
+  /**
+   * Submit a pending song operation (approve/reject/keep/revoke)
+   */
+  async updatePendingSongState(songId: string, version: number, state: PendingSongOperation): Promise<string> {
+    return this.apiCall<string>(`/psop?id=${encodeURIComponent(songId)}&version=${version}&state=${state}`);
   }
 
   async fetchDisplayQuery(command: string, options?: { signal?: AbortSignal }): Promise<Display | null> {
