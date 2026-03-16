@@ -30,6 +30,11 @@ AuthContext.displayName = "AuthContext";
 
 const shouldUseBearerHeader = typeof window !== "undefined" && !!window.electronAPI;
 
+// Guard against React StrictMode double-mount calling loadInitialCredentials
+// concurrently, which causes two session requests racing each other (the server
+// may rotate/invalidate the token on the first request, making the second 401).
+let credentialLoadInFlight = false;
+
 async function getDeviceClientId(): Promise<string> {
   const key = "pp-client-id";
   let id = localStorage.getItem(key);
@@ -69,6 +74,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const loadInitialCredentials = useCallback(async () => {
+    // Prevent concurrent execution (React StrictMode double-mount). The server
+    // may rotate the session token on first use, so a second parallel request
+    // with the same token would get 401.
+    if (credentialLoadInFlight) return;
+    credentialLoadInFlight = true;
+
     setIsLoading(true);
     try {
       // In Electron, resolve the cloud API base URL from the main process (proxy-config.json)
@@ -82,7 +93,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const storedUsername = localStorage.getItem("auth_username")?.trim() || "";
-      const storedToken = localStorage.getItem("auth_token")?.trim() || "";
+      const storedLegacyToken = localStorage.getItem("auth_token")?.trim() || "";
+      const storedSessionToken = localStorage.getItem("pp_session_token")?.trim() || "";
 
       if (storedUsername) {
         setUsername(storedUsername);
@@ -99,11 +111,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
-      // Prefer secure cookie-based session first.
-      let session = await verifySession(storedUsername, null);
-      if (!session && storedToken) {
-        // Backward-compatible fallback for older deployments.
-        session = await verifySession(storedUsername, storedToken);
+      let session: SessionResponse | null = null;
+
+      // Try restoring the session using the stored session token (Bearer).
+      if (storedSessionToken) {
+        session = await verifySession(storedUsername, `Bearer ${storedSessionToken}`);
+      }
+
+      // Browser mode: try cookie-based session if no token or token failed.
+      if (!session && !shouldUseBearerHeader) {
+        session = await verifySession(storedUsername, null);
+      }
+
+      // Backward-compatible fallback for older deployments that stored token in localStorage.
+      if (!session && storedLegacyToken) {
+        session = await verifySession(storedUsername, storedLegacyToken);
       }
 
       if (session) {
@@ -112,10 +134,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
         setAuthStatus("authenticated");
         localStorage.removeItem("auth_token");
+        localStorage.setItem("pp_session_token", session.token);
         return;
       }
 
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("pp_session_token");
       setUser(null);
       setToken(null);
       cloudApi.setToken(null);
@@ -123,6 +147,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error("Auth", "Failed to load initial credentials", error);
     } finally {
+      credentialLoadInFlight = false;
       setIsLoading(false);
     }
   }, []);
@@ -143,6 +168,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuthStatus("authenticated");
         localStorage.setItem("auth_username", username);
         localStorage.removeItem("auth_token");
+        localStorage.setItem("pp_session_token", session.token);
         cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
 
         await Database.switchUser(username);
@@ -181,6 +207,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cloudApi.setToken(null);
       localStorage.removeItem("auth_username");
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("pp_session_token");
 
       await Database.switchUser("");
 
@@ -201,6 +228,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuthStatus("authenticated");
         cloudApi.setToken(shouldUseBearerHeader ? newToken : null);
         localStorage.removeItem("auth_token");
+        localStorage.setItem("pp_session_token", newToken);
       }
     },
     [username]
@@ -211,6 +239,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setToken(null);
     cloudApi.setToken(null);
     localStorage.removeItem("auth_token");
+    localStorage.removeItem("pp_session_token");
     setAuthStatus(username ? "offline" : "guest");
   }, [username]);
 
