@@ -191,14 +191,18 @@ const UserPanel: React.FC<UserPanelProps> = ({
               <Icon type={IconType.SYNC} />
             </button>
             <button
-              className="btn btn-light dropdown-toggle-split sync-menu-toggle position-relative"
+              className="btn btn-light dropdown-toggle-split sync-menu-toggle"
               aria-label="Sync Menu"
               title={t("SyncMenu")}
               onClick={() => setShowSyncMenu(!showSyncMenu)}
             >
               <span className="sync-menu-indicator">▾</span>
-              {pendingSongCount > 0 && <span className="update-dot update-dot-abs" />}
             </button>
+            {pendingSongCount > 0 && (
+              <span className="badge bg-danger rounded-pill pending-badge-abs">
+                {pendingSongCount > 99 ? "99+" : pendingSongCount}
+              </span>
+            )}
             {showSyncMenu && (
               <div className="dropdown-menu show sync-dropdown-menu">
                 <button

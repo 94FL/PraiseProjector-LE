@@ -113,6 +113,7 @@
 
 .user-sync-group {
   margin-left: auto;
+  overflow: visible;
 }
 
 .user-sync-group .btn {
@@ -162,6 +163,22 @@
   padding: 0 0.25rem !important;
   min-width: 1rem !important;
   border-left: 1px solid #ccc;
+  overflow: visible;
+}
+
+/* Pending songs badge on sync dropdown toggle — positioned on the parent
+   .user-sync-group (position-relative) so it never affects button sizing.
+   Kept inside parent bounds to avoid ancestor overflow clipping. */
+.pending-badge-abs {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  font-size: 0.55rem;
+  line-height: 1;
+  padding: 0.15em 0.3em;
+  min-width: 1em;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .sync-menu-indicator {
