@@ -199,9 +199,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
               <span className="sync-menu-indicator">▾</span>
             </button>
             {pendingSongCount > 0 && (
-              <span className="badge bg-danger rounded-pill pending-badge-abs">
-                {pendingSongCount > 99 ? "99+" : pendingSongCount}
-              </span>
+              <span className="badge bg-danger rounded-pill pending-badge-abs">{pendingSongCount > 99 ? "99+" : pendingSongCount}</span>
             )}
             {showSyncMenu && (
               <div className="dropdown-menu show sync-dropdown-menu">
@@ -225,9 +223,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
                   >
                     {t("SongCheckTitle")}
                     {pendingSongCount > 0 && (
-                      <span className="badge bg-danger rounded-pill ms-2">
-                        {pendingSongCount > 99 ? "99+" : pendingSongCount}
-                      </span>
+                      <span className="badge bg-danger rounded-pill ms-2">{pendingSongCount > 99 ? "99+" : pendingSongCount}</span>
                     )}
                   </button>
                 )}

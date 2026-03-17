@@ -2706,16 +2706,28 @@ export class ChordProEditor {
     );
 
     if (isEditable) {
-      addItem(this.localize("Paste"), "Ctrl+V", () => {
-        this.paste();
-        this.draw();
-      }, true, "\u2399");
+      addItem(
+        this.localize("Paste"),
+        "Ctrl+V",
+        () => {
+          this.paste();
+          this.draw();
+        },
+        true,
+        "\u2399"
+      );
     }
 
-    addItem(this.localize("Select All"), "Ctrl+A", () => {
-      this.selectAll();
-      this.draw();
-    }, true, "\u2B1A");
+    addItem(
+      this.localize("Select All"),
+      "Ctrl+A",
+      () => {
+        this.selectAll();
+        this.draw();
+      },
+      true,
+      "\u2B1A"
+    );
 
     if (isEditable) {
       addSeparator();
