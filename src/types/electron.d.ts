@@ -111,6 +111,10 @@ export interface IElectronAPI {
   // Cloud API host from proxy-config.json (main process)
   getCloudApiHost?: () => Promise<string>;
 
+  // Cookie persistence for "Remember Me" feature
+  persistCookies?: () => Promise<boolean>;
+  clearPersistedCookies?: () => Promise<boolean>;
+
   // Network addresses for domain name combobox
   getNetworkAddresses?: () => Promise<string[]>;
   getHostname?: () => Promise<string>;

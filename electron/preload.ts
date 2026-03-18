@@ -220,6 +220,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Cloud API host from proxy-config.json (main process)
   getCloudApiHost: () => ipcRenderer.invoke("get-cloud-api-host") as Promise<string>,
 
+  // Cookie persistence for "Remember Me" feature
+  persistCookies: () => ipcRenderer.invoke("persist-cookies") as Promise<boolean>,
+  clearPersistedCookies: () => ipcRenderer.invoke("clear-persisted-cookies") as Promise<boolean>,
+
   // Network addresses for domain name combobox
   getNetworkAddresses: () => ipcRenderer.invoke("get-network-addresses"),
   getHostname: () => ipcRenderer.invoke("get-hostname") as Promise<string>,

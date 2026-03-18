@@ -31,13 +31,14 @@ const UserPanel: React.FC<UserPanelProps> = ({
   onSongCheckClick,
 }) => {
   const { selectedLeader, setSelectedLeaderId, allLeaders } = useLeader();
-  const { isGuest, username, user, logout, login, setOnLoginSuccess } = useAuth();
+  const { isGuest, username, user, logout, login, commitSession, setOnLoginSuccess } = useAuth();
   const { showMessage } = useMessageBox();
   const { t } = useLocalization();
   const { tt } = useTooltips();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const [pendingSongCount, setPendingSongCount] = useState(0);
+  const [cloudAuthFailed, setCloudAuthFailed] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
   const lastPendingCheckRef = useRef(0);
   // Tracks which action to perform after successful login (null = none).
@@ -55,8 +56,13 @@ const UserPanel: React.FC<UserPanelProps> = ({
     try {
       const count = await cloudApi.fetchPendingSongsCount();
       setPendingSongCount(count);
-    } catch {
-      // Silently ignore — server may be unreachable
+      setCloudAuthFailed(false);
+    } catch (error) {
+      if (error instanceof Error && error.message === "401") {
+        setCloudAuthFailed(true);
+        setPendingSongCount(0);
+      }
+      // Silently ignore other errors — server may be unreachable
     }
     lastPendingCheckRef.current = Date.now();
   }, []);
@@ -143,7 +149,24 @@ const UserPanel: React.FC<UserPanelProps> = ({
     // If token is provided, use it; otherwise use password for authentication
     const success = await login(username, token || password);
     if (success) {
+      setCloudAuthFailed(false);
       setShowAuthDialog(false);
+
+      // In Electron mode, ask user whether to persist login (Remember Me).
+      const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+      if (isElectron) {
+        showConfirmAsync(t("RememberMeTitle"), t("RememberMeMessage"), {
+          confirmText: t("Yes"),
+        }).then((rememberMe) => {
+          if (rememberMe) {
+            commitSession();
+            window.electronAPI?.persistCookies?.();
+          } else {
+            window.electronAPI?.clearPersistedCookies?.();
+          }
+        });
+      }
+
       if (pendingActionAfterLoginRef.current) {
         const action = pendingActionAfterLoginRef.current;
         pendingActionAfterLoginRef.current = null;
@@ -302,7 +325,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
           }}
           showOffline={true}
           onLogout={handleLogout}
-          initialUsername={user?.login}
+          initialUsername={user?.login || username || ""}
         />
       )}
     </div>

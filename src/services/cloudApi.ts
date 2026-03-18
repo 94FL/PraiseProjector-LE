@@ -50,11 +50,87 @@ function sleep(ms: number) {
 
 class CloudApiService {
   private authToken: string | null = null;
+  private accessTokenExp: number = 0; // unix seconds
+  private clientId: string = "";
+  private refreshPromise: Promise<boolean> | null = null;
   // Default to configured cloudApiHost (single source of truth)
   private baseUrl: string = cloudApiBaseUrl;
 
   setToken(token: string | null): void {
     this.authToken = token;
+    this.accessTokenExp = 0;
+    if (token) {
+      // Extract expiry from access tokens (atk.<base64url_payload>.<sig>)
+      const raw = token.startsWith("Bearer ") ? token.substring(7) : token;
+      if (raw.startsWith("atk.")) {
+        try {
+          const payload = raw.split(".")[1];
+          const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+          const claims = JSON.parse(json) as { exp?: number };
+          if (claims.exp) this.accessTokenExp = claims.exp;
+        } catch {
+          /* ignore parse errors */
+        }
+      }
+    }
+  }
+
+  setClientId(id: string): void {
+    this.clientId = id;
+  }
+
+  /** True when the access token is expired or will expire within 2 minutes. */
+  private isAccessTokenExpiringSoon(): boolean {
+    if (!this.accessTokenExp) return false;
+    return this.accessTokenExp - Math.floor(Date.now() / 1000) < 120;
+  }
+
+  /**
+   * Renew the session using the refresh cookie (handled transparently by the
+   * Electron proxy cookie jar, or by the browser in web mode).
+   * Concurrent callers share a single in-flight request.
+   */
+  private async refreshSession(): Promise<boolean> {
+    if (!this.clientId) return false;
+    if (this.refreshPromise) return this.refreshPromise;
+
+    console.debug("[CloudApi] refreshSession: starting token refresh (clientId present, cookie-only)");
+    this.refreshPromise = (async () => {
+      const savedAuth = this.authToken;
+      const savedExp = this.accessTokenExp;
+      try {
+        // Clear the expired access token so the request relies on the refresh
+        // cookie alone (server's v2 refresh flow at /session).
+        this.authToken = null;
+        this.accessTokenExp = 0;
+
+        const response = await this.fetchSession(this.clientId, { skipRefresh: true });
+
+        if (response.token) {
+          console.debug("[CloudApi] refreshSession: success, new token received");
+          this.setToken(response.token);
+          // Notify AuthContext to persist the new access token
+          window.dispatchEvent(
+            new CustomEvent("pp-tokens-refreshed", {
+              detail: { accessToken: response.token },
+            })
+          );
+          return true;
+        }
+      } catch (e) {
+        // Refresh failed — restore previous token (caller will handle 401)
+        console.debug("[CloudApi] refreshSession: failed", e instanceof Error ? e.message : e);
+        this.authToken = savedAuth;
+        this.accessTokenExp = savedExp;
+      }
+      return false;
+    })();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
   }
 
   setBaseUrl(url: string): void {
@@ -94,18 +170,31 @@ class CloudApiService {
     }
   }
 
-  private async apiCall<T>(endpoint: string, postData?: unknown, options?: { signal?: AbortSignal; allowEmpty?: boolean }): Promise<T> {
+  private async apiCall<T>(
+    endpoint: string,
+    postData?: unknown,
+    options?: { signal?: AbortSignal; allowEmpty?: boolean; skipRefresh?: boolean }
+  ): Promise<T> {
     const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    const headers = this.getHeaders();
 
     if (options?.signal?.aborted) {
       throw new Error("aborted");
     }
 
+    // Proactively refresh the access token before it expires (the refresh
+    // cookie is handled transparently by the proxy cookie jar / browser).
+    if (!options?.skipRefresh && this.isAccessTokenExpiringSoon()) {
+      console.debug("[CloudApi] apiCall: access token expiring soon, proactive refresh for", endpoint);
+      await this.refreshSession();
+    }
+
     // Check if we're in Electron and should use the proxy
     const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+    let refreshAttempted = false;
 
     for (let attempt = 0; ; attempt++) {
+      const headers = this.getHeaders();
+
       if (isElectron && window.electronAPI?.proxyPost && window.electronAPI?.proxyGet) {
         // Use Electron IPC proxy to avoid CORS issues
         let result: unknown;
@@ -129,6 +218,11 @@ class CloudApiService {
             continue;
           }
           if (errorResult.error.status === 401) {
+            // Try refreshing the access token once before giving up
+            if (!refreshAttempted && !options?.skipRefresh) {
+              refreshAttempted = true;
+              if (await this.refreshSession()) continue;
+            }
             throw new Error("401");
           }
           throw new Error(errorResult.error.message || "Unknown error");
@@ -166,6 +260,11 @@ class CloudApiService {
             continue;
           }
           if (response.status === 401) {
+            // Try refreshing the access token once before giving up
+            if (!refreshAttempted && !options?.skipRefresh) {
+              refreshAttempted = true;
+              if (await this.refreshSession()) continue;
+            }
             throw new Error("401");
           }
           throw new Error(`HTTP ${response.status}`);
@@ -206,7 +305,7 @@ class CloudApiService {
     return this.parseResponse(leadersResponseCodec, response);
   }
 
-  async fetchSession(clientId: string, options?: { signal?: AbortSignal }): Promise<SessionResponse> {
+  async fetchSession(clientId: string, options?: { signal?: AbortSignal; skipRefresh?: boolean }): Promise<SessionResponse> {
     const response = await this.apiCall<unknown>("/session", { clientId }, options);
     return this.parseResponse(sessionResponseCodec, response);
   }

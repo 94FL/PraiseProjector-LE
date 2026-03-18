@@ -1,4 +1,4 @@
-import React, { useState, useContext, ReactNode, useCallback } from "react";
+import React, { useState, useRef, useContext, useEffect, ReactNode, useCallback } from "react";
 import { SessionResponse } from "../../common/pp-types";
 import { cloudApi } from "../services/cloudApi";
 import { Database } from "../classes/Database";
@@ -19,6 +19,8 @@ interface AuthContextType {
   loadInitialCredentials: () => Promise<void>;
   updateToken: (newToken: string) => void;
   markSessionExpired: () => void;
+  /** Persist the current session token to localStorage (called after "Remember Me" confirmation). */
+  commitSession: () => void;
   onLoginSuccess?: (leaderId?: string) => void;
   setOnLoginSuccess: (callback: (leaderId?: string) => void) => void;
 }
@@ -49,7 +51,12 @@ async function getDeviceClientId(): Promise<string> {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionResponse | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, _setToken] = useState<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
+  const setToken = (t: string | null) => {
+    tokenRef.current = t;
+    _setToken(t);
+  };
   const [username, setUsername] = useState<string | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("guest");
   const [isLoading, setIsLoading] = useState(true);
@@ -59,16 +66,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setOnLoginSuccessCallback(() => callback);
   }, []);
 
+  /** Persist tokens from a successful session response.
+   *  When `persist` is true (default), the access token is written to
+   *  localStorage so it can survive page reloads / short app restarts.
+   *  Set `persist=false` for fresh logins until the user decides on "Remember Me". */
+  const applySession = (session: SessionResponse, persist = true) => {
+    setUser(session);
+    setToken(session.token);
+    cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
+    setAuthStatus("authenticated");
+    localStorage.removeItem("auth_token");
+    if (persist) {
+      localStorage.setItem("pp_session_token", session.token);
+    } else {
+      // Remove stale token from a previous user so it doesn't get sent on restart.
+      localStorage.removeItem("pp_session_token");
+    }
+  };
+
   const verifySession = async (username: string, authToken?: string | null): Promise<SessionResponse | null> => {
     try {
+      const authType = authToken ? (authToken.startsWith("Bearer ") ? "Bearer" : authToken.startsWith("Basic ") ? "Basic" : "raw") : "cookie-only";
+      console.debug("[Auth] verifySession:", { username, authType });
       cloudApi.setToken(authToken ?? null);
-      const response = await cloudApi.fetchSession(await getDeviceClientId());
+      const response = await cloudApi.fetchSession(await getDeviceClientId(), { skipRefresh: true });
       if (response.login === username) {
+        console.debug("[Auth] verifySession: success for", username);
         return response;
       }
+      console.debug("[Auth] verifySession: login mismatch, expected", username, "got", response.login);
       return null;
     } catch (error) {
-      console.error("Auth", "Session verification failed", error);
+      console.debug("[Auth] verifySession: failed", error instanceof Error ? error.message : error);
       return null;
     }
   };
@@ -92,9 +121,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
 
+      // Set clientId early so cloudApi can use it for automatic token refresh.
+      const clientId = await getDeviceClientId();
+      cloudApi.setClientId(clientId);
+
       const storedUsername = localStorage.getItem("auth_username")?.trim() || "";
       const storedLegacyToken = localStorage.getItem("auth_token")?.trim() || "";
       const storedSessionToken = localStorage.getItem("pp_session_token")?.trim() || "";
+      console.debug("[Auth] loadInitialCredentials:", {
+        hasUsername: !!storedUsername,
+        hasSessionToken: !!storedSessionToken,
+        hasLegacyToken: !!storedLegacyToken,
+        isElectron: !!window.electronAPI,
+      });
 
       if (storedUsername) {
         setUsername(storedUsername);
@@ -113,31 +152,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       let session: SessionResponse | null = null;
 
-      // Try restoring the session using the stored session token (Bearer).
+      // Try restoring the session using the stored access token (Bearer).
       if (storedSessionToken) {
+        console.debug("[Auth] loadInitialCredentials: trying Bearer token");
         session = await verifySession(storedUsername, `Bearer ${storedSessionToken}`);
       }
 
-      // Browser mode: try cookie-based session if no token or token failed.
-      if (!session && !shouldUseBearerHeader) {
+      // If Bearer token failed or was missing, try cookie-only session renewal.
+      // In browser mode the browser sends the HttpOnly pp_refresh cookie; in
+      // Electron mode the proxy cookie jar does the same.
+      // First clear stale proxy cookies — they may belong to a different user
+      // (e.g. after impersonation) and would shadow the correct session.
+      if (!session) {
+        console.debug("[Auth] loadInitialCredentials: trying cookie-only renewal");
+        await window.electronAPI?.clearPersistedCookies?.();
         session = await verifySession(storedUsername, null);
       }
 
       // Backward-compatible fallback for older deployments that stored token in localStorage.
       if (!session && storedLegacyToken) {
+        console.debug("[Auth] loadInitialCredentials: trying legacy token");
         session = await verifySession(storedUsername, storedLegacyToken);
       }
 
       if (session) {
-        setUser(session);
-        setToken(session.token);
-        cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
-        setAuthStatus("authenticated");
-        localStorage.removeItem("auth_token");
-        localStorage.setItem("pp_session_token", session.token);
+        console.debug("[Auth] loadInitialCredentials: session restored for", storedUsername);
+        applySession(session);
         return;
       }
 
+      console.debug("[Auth] loadInitialCredentials: all methods failed, setting offline");
       localStorage.removeItem("auth_token");
       localStorage.removeItem("pp_session_token");
       setUser(null);
@@ -160,16 +204,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false);
         return false;
       }
+      // Clear proxy cookie jar before explicit login so stale session cookies
+      // from a previous user don't shadow the Basic auth credentials.
+      await window.electronAPI?.clearPersistedCookies?.();
       const session = await verifySession(username, authToken);
       if (session && session.token) {
-        setUser(session);
-        setToken(session.token);
+        // Don't persist session token yet — wait for "Remember Me" decision.
+        // In non-Electron mode, always persist (browser cookies handle refresh).
+        const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+        applySession(session, !isElectron);
         setUsername(username);
-        setAuthStatus("authenticated");
         localStorage.setItem("auth_username", username);
-        localStorage.removeItem("auth_token");
-        localStorage.setItem("pp_session_token", session.token);
-        cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
 
         await Database.switchUser(username);
 
@@ -208,6 +253,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem("auth_username");
       localStorage.removeItem("auth_token");
       localStorage.removeItem("pp_session_token");
+      // Clear persisted cookies (Electron "Remember Me")
+      window.electronAPI?.clearPersistedCookies?.();
 
       await Database.switchUser("");
 
@@ -243,10 +290,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuthStatus(username ? "offline" : "guest");
   }, [username]);
 
+  const commitSession = useCallback(() => {
+    const t = tokenRef.current;
+    if (t) {
+      localStorage.setItem("pp_session_token", t);
+    }
+  }, []);
+
   const changeUser = async (): Promise<string | null> => {
     await logout();
     return null;
   };
+
+  // Listen for automatic token refresh events from cloudApi.
+  // When cloudApi transparently refreshes the access token via the refresh cookie,
+  // it dispatches this event so we can update React state and localStorage.
+  useEffect(() => {
+    const handleTokensRefreshed = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { accessToken?: string };
+      if (detail.accessToken) {
+        updateToken(detail.accessToken);
+      }
+    };
+
+    window.addEventListener("pp-tokens-refreshed", handleTokensRefreshed);
+    return () => window.removeEventListener("pp-tokens-refreshed", handleTokensRefreshed);
+  }, [updateToken]);
 
   const value = {
     authStatus,
@@ -262,6 +331,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadInitialCredentials,
     updateToken,
     markSessionExpired,
+    commitSession,
     onLoginSuccess,
     setOnLoginSuccess,
   };
@@ -290,6 +360,7 @@ export const useAuth = (): AuthContextType => {
         loadInitialCredentials: async () => {},
         updateToken: () => {},
         markSessionExpired: () => {},
+        commitSession: () => {},
         onLoginSuccess: undefined,
         setOnLoginSuccess: () => {},
       };
