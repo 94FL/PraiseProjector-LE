@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    *  When `persist` is true (default), the access token is written to
    *  localStorage so it can survive page reloads / short app restarts.
    *  Set `persist=false` for fresh logins until the user decides on "Remember Me". */
-  const applySession = (session: SessionResponse, persist = true) => {
+  const applySession = useCallback((session: SessionResponse, persist = true) => {
     setUser(session);
     setToken(session.token);
     cloudApi.setToken(shouldUseBearerHeader ? session.token : null);
@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Remove stale token from a previous user so it doesn't get sent on restart.
       localStorage.removeItem("pp_session_token");
     }
-  };
+  }, []);
 
   const verifySession = async (username: string, authToken?: string | null): Promise<SessionResponse | null> => {
     try {
@@ -161,11 +161,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // If Bearer token failed or was missing, try cookie-only session renewal.
       // In browser mode the browser sends the HttpOnly pp_refresh cookie; in
       // Electron mode the proxy cookie jar does the same.
-      // First clear stale proxy cookies — they may belong to a different user
-      // (e.g. after impersonation) and would shadow the correct session.
       if (!session) {
         console.debug("[Auth] loadInitialCredentials: trying cookie-only renewal");
-        await window.electronAPI?.clearPersistedCookies?.();
         session = await verifySession(storedUsername, null);
       }
 
@@ -184,6 +181,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.debug("[Auth] loadInitialCredentials: all methods failed, setting offline");
       localStorage.removeItem("auth_token");
       localStorage.removeItem("pp_session_token");
+      await window.electronAPI?.clearPersistedCookies?.();
       setUser(null);
       setToken(null);
       cloudApi.setToken(null);
@@ -194,7 +192,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       credentialLoadInFlight = false;
       setIsLoading(false);
     }
-  }, []);
+  }, [applySession]);
 
   const login = async (username: string, password?: string): Promise<boolean> => {
     setIsLoading(true);

@@ -164,9 +164,10 @@ function loadPersistedCookies(): void {
         jar.set(name, value);
       }
       cookieJar.set(origin, jar);
+      console.debug(`[Proxy Cookie] Restored ${jar.size} cookie(s) for ${origin}: ${[...jar.keys()].join(", ")}`);
     }
     cookiePersistenceEnabled = true;
-    console.log(`[Proxy Cookie] Loaded persisted cookies for ${Object.keys(data).length} origin(s) — auto-persist enabled`);
+    console.info(`[Proxy Cookie] Loaded persisted cookies for ${Object.keys(data).length} origin(s) — auto-persist enabled`);
   } catch {
     // Ignore parse/read errors — start with empty jar
   }
@@ -176,15 +177,17 @@ function loadPersistedCookies(): void {
 function persistCookiesToDisk(): void {
   try {
     const data: Record<string, Record<string, string>> = {};
+    let cookieCount = 0;
     for (const [origin, jar] of cookieJar.entries()) {
       const cookies: Record<string, string> = {};
       for (const [name, value] of jar.entries()) {
         cookies[name] = value;
+        ++cookieCount;
       }
       data[origin] = cookies;
     }
     fs.writeFileSync(getCookieFilePath(), JSON.stringify(data), "utf8");
-    console.log("[Proxy Cookie] Persisted cookies to disk");
+    console.info(`[Proxy Cookie] Persisted ${cookieCount} cookie(s) across ${Object.keys(data).length} origin(s) to disk`);
   } catch (error) {
     console.error("[Proxy Cookie] Failed to persist cookies", error);
   }
@@ -196,7 +199,7 @@ function clearPersistedCookies(): void {
     const filePath = getCookieFilePath();
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.log("[Proxy Cookie] Cleared persisted cookies from disk");
+      console.info("[Proxy Cookie] Cleared persisted cookies from disk");
     }
   } catch (error) {
     console.error("[Proxy Cookie] Failed to clear persisted cookies", error);
@@ -215,7 +218,12 @@ function getOrigin(url: string): string {
 /** Extract cookies from Set-Cookie response headers and store them. */
 function captureResponseCookies(url: string, response: { headers?: Record<string, unknown> }): void {
   const raw = response.headers?.["set-cookie"];
-  if (!raw) return;
+  if (!raw) {
+    if (new URL(url).pathname === "/session") {
+      console.debug("[Proxy Cookie] No Set-Cookie headers on /session response");
+    }
+    return;
+  }
 
   const origin = getOrigin(url);
   let jar = cookieJar.get(origin);
@@ -238,14 +246,16 @@ function captureResponseCookies(url: string, response: { headers?: Record<string
     const lower = setCookie.toLowerCase();
     const maxAgeMatch = lower.match(/max-age\s*=\s*(-?\d+)/);
     if (maxAgeMatch && parseInt(maxAgeMatch[1]) <= 0) {
-      console.log(`[Proxy Cookie] Deleting cookie: ${name} (Max-Age=0)`);
+      console.debug(`[Proxy Cookie] Deleting cookie: ${name} (Max-Age=0)`);
       jar.delete(name);
       continue;
     }
 
-    console.log(`[Proxy Cookie] Stored: ${name} (len=${value.length}) for ${origin}`);
+    console.debug(`[Proxy Cookie] Stored: ${name} (len=${value.length}) for ${origin}`);
     jar.set(name, value);
   }
+
+  console.debug(`[Proxy Cookie] Jar for ${origin} now has ${jar.size} cookie(s): ${[...jar.keys()].join(", ")}`);
 
   // Auto-persist to disk when "Remember Me" is active.
   if (cookiePersistenceEnabled) {
@@ -268,9 +278,14 @@ function applyRequestCookies(url: string, headers: Record<string, string>): Reco
   // or a Bearer token for a different user).
   if (headers["Authorization"] || headers["authorization"]) return headers;
   const cookie = getCookieHeader(url);
-  if (!cookie) return headers;
+  if (!cookie) {
+    if (new URL(url).pathname === "/session") {
+      console.warn("[Proxy Cookie] No cookies available for /session request");
+    }
+    return headers;
+  }
   const names = cookie.split("; ").map((c) => c.split("=")[0]);
-  console.log(`[Proxy Cookie] Attaching cookies to ${new URL(url).pathname}: ${names.join(", ")}`);
+  console.debug(`[Proxy Cookie] Attaching cookies to ${new URL(url).pathname}: ${names.join(", ")}`);
   return { ...headers, Cookie: cookie };
 }
 
@@ -300,6 +315,7 @@ export function initializeProxy() {
   ipcMain.handle("proxy-get", async (event, baseUrl: string, path: string, headers?: Record<string, string>) => {
     const validation = validateProxyTarget(baseUrl);
     if (!validation.ok) {
+      console.warn(`[Proxy GET] Blocked target: ${baseUrl} (${validation.error || "validation failed"})`);
       return {
         error: {
           message: validation.error || "Proxy target validation failed",
@@ -309,14 +325,14 @@ export function initializeProxy() {
     }
 
     const url = `${baseUrl}${path}`;
-    console.log(`[Proxy GET] Request: ${url}`);
+    console.debug(`[Proxy GET] Request: ${url}`);
     try {
       const response = await axios.get(url, {
         headers: applyRequestCookies(url, headers || {}),
       });
       captureResponseCookies(url, response);
       const dataSize = JSON.stringify(response.data).length;
-      console.log(`[Proxy GET] Response: ${url} - Status: ${response.status}, Size: ${dataSize} bytes`);
+      console.debug(`[Proxy GET] Response: ${url} - Status: ${response.status}, Size: ${dataSize} bytes`);
       return response.data;
     } catch (error) {
       console.error(`[Proxy GET] Failed: ${url}`, error);
@@ -341,6 +357,7 @@ export function initializeProxy() {
   ipcMain.handle("proxy-post", async (event, baseUrl: string, path: string, data: unknown, headers?: Record<string, string>) => {
     const validation = validateProxyTarget(baseUrl);
     if (!validation.ok) {
+      console.warn(`[Proxy POST] Blocked target: ${baseUrl} (${validation.error || "validation failed"})`);
       return {
         error: {
           message: validation.error || "Proxy target validation failed",
@@ -351,7 +368,7 @@ export function initializeProxy() {
 
     const url = `${baseUrl}${path}`;
     const requestSize = JSON.stringify(data).length;
-    console.log(`[Proxy POST] Request: ${url} - Payload: ${requestSize} bytes`);
+    console.debug(`[Proxy POST] Request: ${url} - Payload: ${requestSize} bytes`);
     try {
       const response = await axios.post(url, data, {
         headers: applyRequestCookies(url, {
@@ -361,7 +378,7 @@ export function initializeProxy() {
       });
       captureResponseCookies(url, response);
       const responseSize = JSON.stringify(response.data).length;
-      console.log(`[Proxy POST] Response: ${url} - Status: ${response.status}, Size: ${responseSize} bytes`);
+      console.debug(`[Proxy POST] Response: ${url} - Status: ${response.status}, Size: ${responseSize} bytes`);
       return response.data;
     } catch (error) {
       console.error(`[Proxy POST] Failed: ${url}`, error);

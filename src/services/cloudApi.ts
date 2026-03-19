@@ -94,7 +94,12 @@ class CloudApiService {
     if (!this.clientId) return false;
     if (this.refreshPromise) return this.refreshPromise;
 
-    console.debug("[CloudApi] refreshSession: starting token refresh (clientId present, cookie-only)");
+    console.debug("[CloudApi] refreshSession: starting token refresh", {
+      clientId: this.clientId,
+      baseUrl: this.baseUrl,
+      hadAuthToken: !!this.authToken,
+      accessTokenExp: this.accessTokenExp,
+    });
     this.refreshPromise = (async () => {
       const savedAuth = this.authToken;
       const savedExp = this.accessTokenExp;
@@ -107,7 +112,10 @@ class CloudApiService {
         const response = await this.fetchSession(this.clientId, { skipRefresh: true });
 
         if (response.token) {
-          console.debug("[CloudApi] refreshSession: success, new token received");
+          console.debug("[CloudApi] refreshSession: success, new token received", {
+            login: response.login,
+            hasLeaderId: !!response.leaderId,
+          });
           this.setToken(response.token);
           // Notify AuthContext to persist the new access token
           window.dispatchEvent(
@@ -119,7 +127,10 @@ class CloudApiService {
         }
       } catch (e) {
         // Refresh failed — restore previous token (caller will handle 401)
-        console.debug("[CloudApi] refreshSession: failed", e instanceof Error ? e.message : e);
+        console.debug("[CloudApi] refreshSession: failed", {
+          error: e instanceof Error ? e.message : e,
+          restoringPreviousToken: !!savedAuth,
+        });
         this.authToken = savedAuth;
         this.accessTokenExp = savedExp;
       }
@@ -184,7 +195,10 @@ class CloudApiService {
     // Proactively refresh the access token before it expires (the refresh
     // cookie is handled transparently by the proxy cookie jar / browser).
     if (!options?.skipRefresh && this.isAccessTokenExpiringSoon()) {
-      console.debug("[CloudApi] apiCall: access token expiring soon, proactive refresh for", endpoint);
+      console.debug("[CloudApi] apiCall: access token expiring soon, proactive refresh", {
+        endpoint,
+        accessTokenExp: this.accessTokenExp,
+      });
       await this.refreshSession();
     }
 
@@ -221,7 +235,12 @@ class CloudApiService {
             // Try refreshing the access token once before giving up
             if (!refreshAttempted && !options?.skipRefresh) {
               refreshAttempted = true;
-              if (await this.refreshSession()) continue;
+              console.debug("[CloudApi] apiCall: Electron proxy returned 401, attempting refresh", { endpoint });
+              if (await this.refreshSession()) {
+                console.debug("[CloudApi] apiCall: refresh after Electron 401 succeeded", { endpoint });
+                continue;
+              }
+              console.debug("[CloudApi] apiCall: refresh after Electron 401 failed", { endpoint });
             }
             throw new Error("401");
           }
@@ -263,7 +282,12 @@ class CloudApiService {
             // Try refreshing the access token once before giving up
             if (!refreshAttempted && !options?.skipRefresh) {
               refreshAttempted = true;
-              if (await this.refreshSession()) continue;
+              console.debug("[CloudApi] apiCall: fetch returned 401, attempting refresh", { endpoint });
+              if (await this.refreshSession()) {
+                console.debug("[CloudApi] apiCall: refresh after fetch 401 succeeded", { endpoint });
+                continue;
+              }
+              console.debug("[CloudApi] apiCall: refresh after fetch 401 failed", { endpoint });
             }
             throw new Error("401");
           }
