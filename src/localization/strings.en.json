@@ -8,6 +8,7 @@
   "ChpMenuRedo": "Redo",
   "ChpMenuCut": "Cut",
   "ChpMenuCopy": "Copy",
+  "ChpMenuCopyAll": "Copy All",
   "ChpMenuPaste": "Paste",
   "ChpMenuSelectAll": "Select All",
   "ChpMenuInsertChord": "Insert Chord",

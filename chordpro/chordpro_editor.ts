@@ -2558,6 +2558,20 @@ export class ChordProEditor {
     }
   }
 
+  async copyAll() {
+    const str = this.genDoc();
+    if (!str) return;
+
+    if (this.onCopy) this.onCopy(str);
+    else {
+      try {
+        await clipboard.writeText(str);
+      } catch (error) {
+        this.log(String(error));
+      }
+    }
+  }
+
   // ---- Context Menu ----
 
   private hideContextMenu() {
@@ -2693,19 +2707,17 @@ export class ChordProEditor {
         hasText,
         "\u2702"
       );
-    }
 
-    addItem(
-      this.localize("Copy"),
-      "Ctrl+C",
-      () => {
-        this.copySelected();
-      },
-      hasText,
-      "\u2398"
-    );
+      addItem(
+        this.localize("Copy"),
+        "Ctrl+C",
+        () => {
+          this.copySelected();
+        },
+        hasText,
+        "\u2398"
+      );
 
-    if (isEditable) {
       addItem(
         this.localize("Paste"),
         "Ctrl+V",
@@ -2716,20 +2728,18 @@ export class ChordProEditor {
         true,
         "\u2399"
       );
-    }
 
-    addItem(
-      this.localize("Select All"),
-      "Ctrl+A",
-      () => {
-        this.selectAll();
-        this.draw();
-      },
-      true,
-      "\u2B1A"
-    );
+      addItem(
+        this.localize("Select All"),
+        "Ctrl+A",
+        () => {
+          this.selectAll();
+          this.draw();
+        },
+        true,
+        "\u2B1A"
+      );
 
-    if (isEditable) {
       addSeparator();
 
       // Insert chord — only when cursor is on a lyrics line, no selection, and not a comment
@@ -2827,7 +2837,7 @@ export class ChordProEditor {
         hasLineSelection,
         "\u2715"
       );
-    }
+    } else addItem(this.localize("Copy All"), "Ctrl+C", () => this.copyAll(), true, "\u2398");
 
     // Position menu at mouse coordinates, clamping to viewport
     let left = e.clientX;

@@ -1080,8 +1080,8 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
             <button
               className="btn btn-outline-secondary"
               type="button"
-              aria-label="Clear Filter"           
-              title={this.props.tt?.("song_filter_clear")}   
+              aria-label="Clear Filter"
+              title={this.props.tt?.("song_filter_clear")}
               onClick={() => {
                 const oldFilter = this.state.filter.toLowerCase();
                 // Notify parent about filter change (controlled mode)
