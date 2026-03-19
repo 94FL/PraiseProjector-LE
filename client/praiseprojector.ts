@@ -1357,7 +1357,10 @@ export class App extends AppBase {
     if (!this.songsToCheckCountLabel) return;
 
     try {
-      count = count ?? (await this.requestAppData<number>("pending_songs?c=1"));
+      if (count === undefined) {
+        const peek = await this.requestAppData<{ pendingSongCount?: number }>("peek");
+        count = peek?.pendingSongCount ?? 0;
+      }
       makeVisible(this.songsToCheckCountLabel, !!count);
       this.songsToCheckCountLabel.innerText = count > 99 ? "99+" : count.toString();
     } catch (error) {

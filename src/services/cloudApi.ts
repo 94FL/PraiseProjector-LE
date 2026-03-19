@@ -4,6 +4,7 @@ import { decode } from "../../common/io-utils";
 import {
   Display,
   OnlineSessionEntry,
+  PeekResponse,
   PlaylistEntry,
   PendingSongOperation,
   SessionResponse,
@@ -16,6 +17,7 @@ import {
   errorResponseCodec,
   leadersResponseCodec,
   onlineSessionEntryListCodec,
+  peekResponseCodec,
   sessionResponseCodec,
   songHistoryResponseCodec,
   songsResponseCodec,
@@ -376,6 +378,14 @@ class CloudApiService {
   }
 
   /**
+   * Fetch lightweight sync metadata.
+   */
+  async fetchPeek(): Promise<PeekResponse> {
+    const response = await this.apiCall<unknown>("/peek");
+    return this.parseResponse(peekResponseCodec, response);
+  }
+
+  /**
    * Fetch list of pending songs awaiting review
    */
   async fetchPendingSongs(): Promise<SongDBPendingEntry[]> {
@@ -386,7 +396,8 @@ class CloudApiService {
    * Fetch count of pending songs awaiting review
    */
   async fetchPendingSongsCount(): Promise<number> {
-    return this.apiCall<number>("/pending_songs?c=1");
+    const peek = await this.fetchPeek();
+    return peek.pendingSongCount;
   }
 
   /**

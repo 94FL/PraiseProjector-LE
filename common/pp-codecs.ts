@@ -203,6 +203,11 @@ export const errorResponseCodec = t.type({
  */
 export const sessionResponseCodec = uniType({ token: t.string, login: t.string }, { leaderId: t.string });
 
+export const peekResponseCodec = t.type({
+  dbVersion: t.number,
+  pendingSongCount: t.number,
+});
+
 export const editSongResponseCodec = uniType({ version: t.number, song: t.string, system: chordSystemCodec }, {});
 
 // ═══════════════════════════════════════════════════════════════════════════════

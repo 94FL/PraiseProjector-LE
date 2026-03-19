@@ -188,6 +188,25 @@
   cursor: pointer;
 }
 
+.sync-empty-dot,
+.sync-menu-item-dot {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background-color: #dc3545;
+}
+
+.sync-empty-dot {
+  top: -1px;
+  right: -3px;
+}
+
+.sync-menu-item-dot {
+  margin-left: 1rem;
+  flex: 0 0 auto;
+}
+
 .sync-menu-indicator {
   font-size: 0.625rem;
   line-height: 1;

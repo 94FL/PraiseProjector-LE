@@ -24,6 +24,7 @@ import {
   songDBEntryWithDataCodec,
   playlistEntryCodec,
   sessionResponseCodec,
+  peekResponseCodec,
   editSongResponseCodec,
   ppdMessageInternalCodec,
   ppdMessageCodec,
@@ -149,6 +150,8 @@ export type DeviceDataResponse = {
   url: string;
   error?: string;
 };
+
+export type PeekResponse = t.TypeOf<typeof peekResponseCodec>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  HTTP response types

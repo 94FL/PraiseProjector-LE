@@ -6,10 +6,13 @@ import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useTooltips } from "../localization/TooltipContext";
 import { cloudApi } from "../services/cloudApi";
+import { useSettings } from "../hooks/useSettings";
+import { Database } from "../classes/Database";
 import AuthDialog from "./AuthDialog";
 
-const PENDING_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour between server queries
-const PENDING_POLL_TICK_MS = 1000; // check every second whether it's time to query
+const DEFAULT_PEEK_INTERVAL_SECONDS = 60 * 60;
+const MIN_PEEK_INTERVAL_SECONDS = 10;
+const PEEK_POLL_TICK_MS = 1000; // check every second whether it's time to query
 
 interface UserPanelProps {
   onOpenLeaderSettings?: (leaderId: string | null) => void;
@@ -31,63 +34,104 @@ const UserPanel: React.FC<UserPanelProps> = ({
   onSongCheckClick,
 }) => {
   const { selectedLeader, setSelectedLeaderId, allLeaders } = useLeader();
-  const { isGuest, username, user, logout, login, commitSession, setOnLoginSuccess } = useAuth();
+  const { isGuest, isLoading: isAuthLoading, username, user, logout, login, commitSession, setOnLoginSuccess } = useAuth();
+  const { settings } = useSettings();
   const { showMessage, showConfirmAsync } = useMessageBox();
   const { t } = useLocalization();
   const { tt } = useTooltips();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const [pendingSongCount, setPendingSongCount] = useState(0);
+  const [cloudDbVersion, setCloudDbVersion] = useState<number | null>(null);
+  const [localDbVersion, setLocalDbVersion] = useState(0);
   const [cloudAuthFailed, setCloudAuthFailed] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
-  const lastPendingCheckRef = useRef(0);
+  const lastPeekCheckRef = useRef(0);
   // Tracks which action to perform after successful login (null = none).
   const pendingActionAfterLoginRef = useRef<(() => void) | null>(null);
   // Keep refs to the latest callbacks so deferred calls after login
   // always use the re-rendered callback with fresh auth state.
   const onSyncClickRef = useRef(onSyncClick);
-  onSyncClickRef.current = onSyncClick;
   const onSongCheckClickRef = useRef(onSongCheckClick);
-  onSongCheckClickRef.current = onSongCheckClick;
 
-  // Periodic pending song count polling (matching praiseprojector.ts pattern:
-  // check every second whether enough time has passed, query server every hour)
-  const fetchPendingCount = useCallback(async () => {
+  useEffect(() => {
+    onSyncClickRef.current = onSyncClick;
+    onSongCheckClickRef.current = onSongCheckClick;
+  }, [onSyncClick, onSongCheckClick]);
+
+  const peekIntervalSeconds = Math.max(MIN_PEEK_INTERVAL_SECONDS, (settings?.serverPeekIntervalMinutes ?? 60) * 60);
+  const peekIntervalMs = peekIntervalSeconds * 1000;
+
+  const fetchPeek = useCallback(async () => {
     try {
-      const count = await cloudApi.fetchPendingSongsCount();
-      setPendingSongCount(count);
+      const peek = await cloudApi.fetchPeek();
+      setPendingSongCount(peek.pendingSongCount ?? 0);
+      setCloudDbVersion(peek.dbVersion ?? null);
       setCloudAuthFailed(false);
     } catch {
-      setCloudAuthFailed(true);
+      // During initial auth restore, avoid showing cloud-auth-failed state.
+      if (!isGuest && !isAuthLoading) setCloudAuthFailed(true);
       setPendingSongCount(0);
+      setCloudDbVersion(null);
     }
-    lastPendingCheckRef.current = Date.now();
+    lastPeekCheckRef.current = Date.now();
+  }, [isGuest, isAuthLoading]);
+
+  const userDisplayName = isAuthLoading ? user?.login || username || t("Loading") : isGuest ? t("Guest") : user?.login || username || "Authenticated";
+
+  useEffect(() => {
+    let cleanupDbListener = () => {};
+    let mounted = true;
+
+    const subscribeToDb = async () => {
+      cleanupDbListener();
+      const db = await Database.waitForReady();
+      if (!mounted) return;
+      setLocalDbVersion(db.version);
+      const onDbUpdated = () => setLocalDbVersion(db.version);
+      db.emitter.on("db-updated", onDbUpdated);
+      cleanupDbListener = () => db.emitter.off("db-updated", onDbUpdated);
+    };
+
+    const handleDatabaseSwitched = () => {
+      subscribeToDb();
+    };
+
+    subscribeToDb();
+    window.addEventListener("pp-database-switched", handleDatabaseSwitched);
+
+    return () => {
+      mounted = false;
+      cleanupDbListener();
+      window.removeEventListener("pp-database-switched", handleDatabaseSwitched);
+    };
   }, []);
 
   useEffect(() => {
     const tick = setInterval(() => {
-      if (!isGuest && Date.now() - lastPendingCheckRef.current >= PENDING_CHECK_INTERVAL_MS) {
-        fetchPendingCount();
+      if (Date.now() - lastPeekCheckRef.current >= peekIntervalMs) {
+        fetchPeek();
       }
-    }, PENDING_POLL_TICK_MS);
-    // Also check immediately on mount / auth change / user change
-    if (!isGuest) {
-      fetchPendingCount();
-    } else {
-      setPendingSongCount(0);
-      lastPendingCheckRef.current = 0;
-    }
-    return () => clearInterval(tick);
-  }, [isGuest, username, fetchPendingCount]);
+    }, PEEK_POLL_TICK_MS);
+
+    const kickoff = setTimeout(() => {
+      fetchPeek();
+    }, 0);
+
+    return () => {
+      clearInterval(tick);
+      clearTimeout(kickoff);
+    };
+  }, [username, peekIntervalMs, fetchPeek]);
 
   // Listen for external refresh requests (e.g. after SongCheckDialog processes songs)
   useEffect(() => {
     const handleRefresh = () => {
-      fetchPendingCount();
+      fetchPeek();
     };
     window.addEventListener("pp-pending-songs-changed", handleRefresh);
     return () => window.removeEventListener("pp-pending-songs-changed", handleRefresh);
-  }, [fetchPendingCount]);
+  }, [fetchPeek]);
 
   // Register callback for auto-selecting leader after login
   useEffect(() => {
@@ -148,7 +192,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
     if (success) {
       setCloudAuthFailed(false);
       setShowAuthDialog(false);
-      fetchPendingCount();
+      fetchPeek();
 
       // In Electron mode, ask user whether to persist login (Remember Me).
       const isElectron = typeof window !== "undefined" && !!window.electronAPI;
@@ -181,6 +225,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
     await logout();
     pendingActionAfterLoginRef.current = null;
     setShowAuthDialog(false);
+    fetchPeek();
   };
 
   const handleLeaderSettingsClick = () => {
@@ -188,6 +233,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
   };
 
   const showSyncControls = !!(onSyncClick || onExportDatabase || onImportDatabase || onReplaceDatabase);
+  const hasCloudDbUpdate = !isGuest && cloudDbVersion !== null && cloudDbVersion > localDbVersion;
 
   return (
     <div>
@@ -200,7 +246,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
             type="text"
             readOnly
             className="form-control user-login-input"
-            value={isGuest ? t("Guest") : user?.login || username || "Authenticated"}
+            value={userDisplayName}
             aria-label="User Name"
             onClick={handleUserButtonClick}
             style={{ cursor: "pointer" }}
@@ -225,17 +271,20 @@ const UserPanel: React.FC<UserPanelProps> = ({
               </span>
             ) : pendingSongCount > 0 ? (
               <span className="badge bg-danger rounded-pill pending-badge-abs">{pendingSongCount > 99 ? "99+" : pendingSongCount}</span>
+            ) : hasCloudDbUpdate ? (
+              <span className="pending-badge-abs sync-empty-dot" aria-hidden="true"></span>
             ) : null}
             {showSyncMenu && (
               <div className="dropdown-menu show sync-dropdown-menu">
                 <button
-                  className="dropdown-item"
+                  className="dropdown-item d-flex align-items-center justify-content-between"
                   onClick={() => {
                     setShowSyncMenu(false);
                     onSyncClick?.();
                   }}
                 >
                   {t("MenuSyncDatabase")}
+                  {hasCloudDbUpdate && <span className="sync-menu-item-dot" aria-hidden="true"></span>}
                 </button>
                 {onSongCheckClick && !isGuest && (
                   <button

@@ -95,6 +95,9 @@ export interface Settings {
   // Last sync date for "old sync" warning when entering edit mode
   lastSyncDate?: string; // ISO date string, null if never synced
 
+  // Interval of automatic /peek calls (minutes)
+  serverPeekIntervalMinutes: number;
+
   // Log level for console output (0=Debug, 1=Info, 2=Warn, 3=Error, 4=None)
   logLevel: number;
 

@@ -154,6 +154,20 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, updateSetti
             </label>
           </div>
           <div className="form-group">
+            <label htmlFor="serverPeekIntervalMinutes">{t("SettingsPeekIntervalMinutes")}</label>
+            <input
+              id="serverPeekIntervalMinutes"
+              className="form-control"
+              type="number"
+              min={1}
+              max={1440}
+              step={1}
+              value={settings.serverPeekIntervalMinutes}
+              onChange={(e) => updateSetting("serverPeekIntervalMinutes", Math.max(1, parseInt(e.target.value || "0", 10) || 1))}
+            />
+            <small className="form-text text-muted">{t("SettingsPeekIntervalMinutesDescription")}</small>
+          </div>
+          <div className="form-group">
             <label htmlFor="sectionSelectionMode">{t("SettingsSectionSelectionInEditor")}</label>
             <select className="form-control" id="sectionSelectionMode" value={getSectionSelectionValue()} onChange={handleSectionSelectionChange}>
               <option value="None">{t("SettingsSectionSelNone")}</option>
