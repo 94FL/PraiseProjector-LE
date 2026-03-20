@@ -30,6 +30,24 @@ app.setName(stableAppName);
 // On macOS:   ~/Library/Application Support/PraiseProjector
 // On Linux:   ~/.config/PraiseProjector
 
+// Single-instance lock to prevent multiple app instances
+// Uses Electron's built-in lock (doesn't rely on file flags, survives process crashes)
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running, exit this one
+  app.quit();
+}
+
+// Handle attempts to start a second instance
+app.on("second-instance", () => {
+  // Someone tried to run a second instance, we should focus our window
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
 // Track powerSaveBlocker ID to prevent duplicate blockers
 let powerSaveBlockerId: number | null = null;
 
