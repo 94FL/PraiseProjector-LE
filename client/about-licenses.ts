@@ -83,16 +83,10 @@ const clientWebAppTools: ThirdPartyEntry[] = [
     licenceUrl: "https://github.com/microsoft/TypeScript/blob/main/LICENSE.txt",
   },
   {
-    name: "browserify",
-    url: "https://github.com/browserify/browserify",
+    name: "esbuild",
+    url: "https://github.com/evanw/esbuild",
     licence: "MIT License",
-    licenceUrl: "https://github.com/browserify/browserify/blob/master/LICENSE",
-  },
-  {
-    name: "uglify-js",
-    url: "https://github.com/mishoo/UglifyJS",
-    licence: "UglifyJS License",
-    licenceUrl: "https://github.com/mishoo/UglifyJS/blob/master/LICENSE",
+    licenceUrl: "https://github.com/evanw/esbuild/blob/main/LICENSE.md",
   },
 ];
 

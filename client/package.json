@@ -1,20 +1,18 @@
 {
   "name": "pp-client",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "PraiseProjector browser client",
   "scripts": {
     "build": "npm run build:release",
-    "build:debug": "browserify ./pp-api.ts -p tsify --debug -s P -o ../public/app/pp-api.js",
-    "build:release": "browserify ./pp-api.ts -p tsify -s P | uglifyjs -c -m -o ../public/app/pp-api.js",
+    "build:debug": "esbuild ./pp-api.ts --bundle --format=iife --global-name=P --platform=browser --target=es2018 --sourcemap --outfile=../public/app/pp-api.js",
+    "build:release": "esbuild ./pp-api.ts --bundle --format=iife --global-name=P --platform=browser --target=es2018 --minify --outfile=../public/app/pp-api.js",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\""
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "browserify": "^17.0.0",
-    "tsify": "^5.0.4",
-    "uglify-js": "^3.17.4",
+    "esbuild": "^0.25.10",
     "typescript": "^5.0.0"
   },
   "dependencies": {
