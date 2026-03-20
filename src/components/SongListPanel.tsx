@@ -1015,12 +1015,14 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
             </div>
           </div>
           <div className="songlist-context-menu-divider"></div>
-          <div
-            className={`songlist-context-menu-item ${!this.state.selectedSong || this.state.isLoadingHistory ? "disabled" : ""}`}
-            onClick={this.state.selectedSong && !this.state.isLoadingHistory ? this.handleShowHistory : undefined}
-          >
-            {this.state.isLoadingHistory ? this.props.t?.("LoadingEllipsis") || "Loading..." : this.props.t?.("History") || "History"}
-          </div>
+          {!this.props.isGuest && (
+            <div
+              className={`songlist-context-menu-item ${!this.state.selectedSong || this.state.isLoadingHistory ? "disabled" : ""}`}
+              onClick={this.state.selectedSong && !this.state.isLoadingHistory ? this.handleShowHistory : undefined}
+            >
+              {this.state.isLoadingHistory ? this.props.t?.("LoadingEllipsis") : this.props.t?.("History")}
+            </div>
+          )}
           {/* Ungroup - visible when selected song is in a group */}
           {this.state.selectedSong && this.state.selectedSong.GroupId && (
             <>
