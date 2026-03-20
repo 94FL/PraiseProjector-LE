@@ -77,7 +77,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
     lastPeekCheckRef.current = Date.now();
   }, [isGuest, isAuthLoading]);
 
-  const userDisplayName = isAuthLoading ? user?.login || username || t("Loading") : isGuest ? t("Guest") : user?.login || username || "Authenticated";
+  const userDisplayName = isAuthLoading ? user?.login || username || t("Loading") : !isGuest ? user?.login || username : t("Guest");
 
   useEffect(() => {
     let cleanupDbListener = () => {};
