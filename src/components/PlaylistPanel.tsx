@@ -72,7 +72,7 @@ export interface PlaylistPanelMethods {
   getSelectedIndex: () => number;
   getPreferencesForSongId: (songId: string) => SongPreferenceData | null;
   updatePlaylist: (playlist: PlaylistEntryData[]) => void;
-  updatePlaylistItemPreferences: (songId: string, transpose?: number, capo?: number, instructions?: string) => void;
+  updatePlaylistItemPreferences: (songId: string, transpose?: number, capo?: number, instructions?: string) => Playlist | null;
   getScheduleDate: () => Date | null;
   getCurrentPlaylist: () => Playlist;
 }
@@ -395,7 +395,7 @@ class PlaylistPanel extends React.Component<PlaylistPanelProps, PlaylistPanelSta
     });
   }
 
-  updatePlaylistItemPreferences(songId: string, transpose?: number, capo?: number, instructions?: string) {
+  updatePlaylistItemPreferences(songId: string, transpose?: number, capo?: number, instructions?: string): Playlist | null {
     // Implementation to update playlist item preferences
     const { currentPlaylist, focusedIndex } = this.state;
     const index =
@@ -407,15 +407,18 @@ class PlaylistPanel extends React.Component<PlaylistPanelProps, PlaylistPanelSta
       if (transpose !== undefined) item.transpose = transpose;
       if (capo !== undefined) item.capo = capo > 0 ? capo : -1; // Capo of 0 or less is treated as "no capo"
       if (instructions !== undefined) item.instructions = instructions;
+      const newPlaylist = new Playlist(currentPlaylist.name, [...currentPlaylist.items], currentPlaylist.id);
       this.setState(
         {
-          currentPlaylist: new Playlist(currentPlaylist.name, [...currentPlaylist.items], currentPlaylist.id),
+          currentPlaylist: newPlaylist,
         },
         () => {
           this.doUpdatePlaylistCallback(this.state.currentPlaylist); // Update Display state
         }
       );
+      return newPlaylist;
     }
+    return null;
   }
 
   private colorUpdateTimer: NodeJS.Timeout | null = null;

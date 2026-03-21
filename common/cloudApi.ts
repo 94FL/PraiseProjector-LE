@@ -67,17 +67,6 @@ interface IProxyAPI {
   ): Promise<{ data: unknown; ppHeaders: Record<string, string> } | { error: { message: string; status?: number; data?: unknown } }>;
 }
 
-/**
- * Safely get the proxyAPI from window if it exists
- * (window.electronAPI is fully typed in src/types/electron.d.ts as IElectronAPI)
- */
-function getProxyApi(): IProxyAPI | undefined {
-  if (typeof window === "undefined") return undefined;
-  // Cast to any to avoid type conflicts - the full typing is in electron.d.ts
-  const electronAPI = (window as any).electronAPI;
-  return electronAPI?.proxyGet && electronAPI?.proxyPost ? electronAPI : undefined;
-}
-
 function extractPpHeadersFromFetch(headers: Headers): Record<string, string> {
   const ppHeaders: Record<string, string> = {};
   headers.forEach((value, key) => {
@@ -97,6 +86,11 @@ export class CloudApiService {
   // Track in-flight requests for abort support
   private inFlightRequests = new Map<AbortController, undefined>();
   private fixedHeaders = new Map<string, string>();
+  private proxyApi?: IProxyAPI;
+
+  setProxy(proxyApi: IProxyAPI) {
+    this.proxyApi = proxyApi;
+  }
 
   setToken(token: string | null): void {
     this.authToken = token;
@@ -290,18 +284,17 @@ export class CloudApiService {
       }
 
       // Check if we're in Electron and should use the proxy
-      const proxyApi = getProxyApi();
       let refreshAttempted = false;
 
       for (let attempt = 0; ; attempt++) {
         const headers = this.getHeaders();
 
-        if (proxyApi) {
+        if (this.proxyApi) {
           // Use Electron IPC proxy to avoid CORS issues
           const result =
             postData !== undefined
-              ? await proxyApi.proxyPost(this.baseUrl, path, postData as string | Record<string, string>, headers)
-              : await proxyApi.proxyGet(this.baseUrl, path, headers);
+              ? await this.proxyApi.proxyPost(this.baseUrl, path, postData as string | Record<string, string>, headers)
+              : await this.proxyApi.proxyGet(this.baseUrl, path, headers);
 
           if (combinedSignal.aborted) {
             throw new Error("aborted");
@@ -489,11 +482,14 @@ export class CloudApiService {
     return this.apiCall<string>(`/psop?id=${encodeURIComponent(songId)}&version=${version}&state=${state}`);
   }
 
-  async fetchDisplayQuery(display: Display, options?: { 
-      signal?: AbortSignal,
-      leaderId?: string,
-      forced?: boolean,
-  }): Promise<{ display: Display; ppHeaders: Record<string, string> }> {
+  async fetchDisplayQuery(
+    display: Display,
+    options?: {
+      signal?: AbortSignal;
+      leaderId?: string;
+      forced?: boolean;
+    }
+  ): Promise<{ display: Display; ppHeaders: Record<string, string> }> {
     let command =
       "display_query?id=" +
       display.songId +
@@ -514,11 +510,10 @@ export class CloudApiService {
     if (options?.forced) command += "&forced=true";
 
     const path = command.startsWith("/") ? command : `/${command}`;
-    const proxyApi = getProxyApi();
 
-    if (proxyApi) {
+    if (this.proxyApi) {
       const headers = this.getHeaders();
-      const result = await proxyApi.proxyGet(this.baseUrl, path, headers);
+      const result = await this.proxyApi.proxyGet(this.baseUrl, path, headers);
       if (result && typeof result === "object" && "error" in result) {
         const errorResult = result as { error: { message?: string; status?: number } };
         const status = errorResult.error?.status;
@@ -607,20 +602,13 @@ export class CloudApiService {
 
       // Build headers with form encoding
       const headers = this.applyCommonHeaders({
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type": "application/json",
         "X-PP-Intent": "control-update",
       });
 
       // Check if we're in Electron and should use the proxy
-      const proxyApi = getProxyApi();
-
-      if (proxyApi) {
-        // Use Electron IPC proxy - send form data as URLSearchParams string
-        const formData = new URLSearchParams();
-        for (const [key, value] of Object.entries(values)) {
-          formData.append(key, value);
-        }
-        const result = await proxyApi.proxyPost(this.baseUrl, "/display_update", formData.toString(), headers);
+      if (this.proxyApi) {
+        const result = await this.proxyApi.proxyPost(this.baseUrl, "/display_update", JSON.stringify(values), headers);
 
         // Check for error response from proxy
         if (result && "error" in result) {
@@ -634,19 +622,11 @@ export class CloudApiService {
         return true;
       } else {
         // Web mode: use direct fetch with Vite proxy
-        const formData = new URLSearchParams();
-        for (const [key, value] of Object.entries(values)) {
-          formData.append(key, value);
-        }
-
         const url = `${this.baseUrl}/display_update`;
         const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            ...headers,
-          },
-          body: formData,
+          headers,
+          body: JSON.stringify(values),
           credentials: "include",
         });
 
@@ -706,58 +686,36 @@ export class CloudApiService {
     return this.parseResponse(leadersResponseCodec, response);
   }
 
-  /** Send form-encoded POST request to arbitrary endpoint */
-  async sendFormPost(
+  /** Send JSON POST request to arbitrary endpoint (legacy method name kept for compatibility). */
+  async sendPost(
     endpoint: string,
     formFields: Record<string, string | number | boolean | SongPreferenceEntry[]>,
     extraHeaders?: Record<string, string>
   ): Promise<string> {
     const headers = this.applyCommonHeaders({
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
       ...extraHeaders,
     });
 
-    // Check if we're in Electron and should use the proxy
-    const proxyApi = getProxyApi();
+    const payload = JSON.stringify(formFields);
 
-    if (proxyApi) {
+    // Check if we're in Electron and should use the proxy
+    if (this.proxyApi) {
       // Use Electron IPC proxy
-      const formData = new URLSearchParams();
-      for (const [key, value] of Object.entries(formFields)) {
-        if (Array.isArray(value)) {
-          // Handle array of objects (e.g., songs)
-          for (const item of value) {
-            formData.append(key, JSON.stringify(item));
-          }
-        } else {
-          formData.append(key, String(value));
-        }
-      }
-      const result = await proxyApi.proxyPost(this.baseUrl, endpoint, formData.toString(), headers);
+      const result = await this.proxyApi.proxyPost(this.baseUrl, endpoint, payload, headers);
       if (result && "error" in result) {
         const errorResult = result as { error: { message: string; status?: number } };
         throw new Error(errorResult.error.message);
       }
-      const payload = result && "data" in result ? (result as { data: unknown }).data : result;
-      return typeof payload === "string" ? payload : JSON.stringify(payload);
+      const responseData = result && "data" in result ? (result as { data: unknown }).data : result;
+      return typeof responseData === "string" ? responseData : JSON.stringify(responseData);
     } else {
       // Web mode: use fetch
-      const formData = new URLSearchParams();
-      for (const [key, value] of Object.entries(formFields)) {
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            formData.append(key, JSON.stringify(item));
-          }
-        } else {
-          formData.append(key, String(value));
-        }
-      }
-
       const url = `${this.baseUrl}${endpoint}`;
       const response = await fetch(url, {
         method: "POST",
         headers,
-        body: formData,
+        body: payload,
         credentials: "include",
       });
 

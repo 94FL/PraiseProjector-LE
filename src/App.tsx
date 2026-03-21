@@ -736,17 +736,18 @@ const AppContent: React.FC = () => {
     const currentDisplay = getCurrentDisplay();
     if (data.command === "song_update") {
       updateLeaderPreferenceFromRequest(data);
+      const playlist = leftPanelRef.current?.updatePlaylistItemPreferences(data.id, data.transpose, data.capo, data.instructions);
+      updateCurrentDisplay({
+        transpose: data.transpose ?? currentDisplay.transpose,
+        capo: data.capo ?? currentDisplay.capo,
+        instructions: data.instructions ?? currentDisplay.instructions,
+        playlist: playlist?.items ?? currentDisplay.playlist,
+      });
       return;
     }
     if (data.command === "display_update") {
       if (data.playlist) {
-        let playlist: PlaylistEntryDataList;
-        try {
-          playlist = decode(playlistEntryListCodec, JSON.parse(data.playlist));
-        } catch {
-          playlist = data.playlist.split("\n").map((line) => decode(playlistEntryCodec, JSON.parse(line)));
-        }
-        leftPanelRef.current?.updatePlaylist(playlist);
+        leftPanelRef.current?.updatePlaylist(data.playlist);
       } else if (currentDisplay.songId !== data.id) {
         const _db = Database.getInstance();
         const song = _db.getSongById(data.id);
@@ -776,7 +777,7 @@ const AppContent: React.FC = () => {
       } else {
         // Same song - simulate user interaction: update preferences and select section
         // 1. Update playlist item preferences (transpose, capo, instructions)
-        leftPanelRef.current?.updatePlaylistItemPreferences(data.id, data.transpose, data.capo, data.instructions);
+        const playlist = leftPanelRef.current?.updatePlaylistItemPreferences(data.id, data.transpose, data.capo, data.instructions);
         updateLeaderPreferenceFromPlaylist(data.id);
         // 2. Select the section matching the requested line range - this drives
         //    PreviewPanel's updateDisplayState → updateCurrentDisplay → backend sync
@@ -786,6 +787,7 @@ const AppContent: React.FC = () => {
           transpose: data.transpose ?? currentDisplay.transpose,
           capo: data.capo ?? currentDisplay.capo,
           instructions: data.instructions ?? currentDisplay.instructions,
+          playlist: playlist?.items ?? currentDisplay.playlist,
         });
       }
     }

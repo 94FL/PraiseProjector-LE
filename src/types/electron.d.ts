@@ -1,4 +1,5 @@
 import { Display as PPDisplay } from "../../common/pp-types";
+import { PlaylistEntry } from "../classes/PlaylistEntry";
 import { Settings } from "../types";
 
 export type Display = PPDisplay;
@@ -21,7 +22,7 @@ export type DisplayUpdateRequest = {
   capo?: number;
   instructions?: string;
   title?: string;
-  playlist?: string;
+  playlist?: PlaylistEntry[];
 };
 
 export type WindowBounds = {

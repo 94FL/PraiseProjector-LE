@@ -375,7 +375,7 @@ export class Song {
             slist.push(new Song.Section("", 0, 0, block, currentType, currentTag));
         }
       } else if (!bInGrid && !trimmed.startsWith("#")) {
-        lyrics_line = line.replaceAll(Song.rxTagged, "");
+        lyrics_line = line.replace(Song.rxTagged, "");
       }
 
       if (lyrics_line) {

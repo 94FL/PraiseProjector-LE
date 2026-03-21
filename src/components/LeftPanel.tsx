@@ -21,7 +21,7 @@ export interface LeftPanelMethods {
   selectPlaylistSongById: (songId: string) => PlaylistEntry | null;
   getPreferencesForSongId: (songId: string) => SongPreferenceData | null;
   updatePlaylist: (playlist: PlaylistEntryData[]) => void;
-  updatePlaylistItemPreferences: (songId: string, transpose?: number, capo?: number, instructions?: string) => void;
+  updatePlaylistItemPreferences: (songId: string, transpose?: number, capo?: number, instructions?: string) => Playlist | null;
   getScheduleDate: () => Date | null;
   getCurrentPlaylist: () => Playlist;
   // Song tree methods
@@ -109,7 +109,7 @@ const LeftPanel = forwardRef<LeftPanelMethods, LeftPanelProps>(
         getPreferencesForSongId: (songId: string) => playlistPanelRef.current?.getPreferencesForSongId(songId) ?? null,
         updatePlaylist: (playlist: PlaylistEntryData[]) => playlistPanelRef.current?.updatePlaylist(playlist),
         updatePlaylistItemPreferences: (songId: string, transpose?: number, capo?: number, instructions?: string) =>
-          playlistPanelRef.current?.updatePlaylistItemPreferences(songId, transpose, capo, instructions),
+          playlistPanelRef.current?.updatePlaylistItemPreferences(songId, transpose, capo, instructions) ?? null,
         getScheduleDate: () => playlistPanelRef.current?.getScheduleDate() ?? null,
         getCurrentPlaylist: () => playlistPanelRef.current?.getCurrentPlaylist() ?? new Playlist("CurrentPlaylist", []),
         // Song tree methods

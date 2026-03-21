@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron";
-import { Display } from "../common/pp-types";
+import { Display, PlaylistEntry } from "../common/pp-types";
 import { Settings } from "../src/types";
 import { ApiResponse } from "../common/ipc-types";
 import { WindowBounds } from "../src/types/electron";
@@ -92,7 +92,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       capo: number;
       instructions: string;
       title: string;
-      playlist: string;
+      playlist?: PlaylistEntry[];
     }) => void
   ) => {
     const subscription = (
@@ -106,7 +106,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
         capo: number;
         instructions: string;
         title: string;
-        playlist: string;
+        playlist?: PlaylistEntry[];
       }
     ) => callback(data);
     ipcRenderer.on("remote-display-update", subscription);

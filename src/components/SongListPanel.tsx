@@ -16,6 +16,7 @@ import { SongPreference } from "../classes/SongPreference";
 import { Leader } from "../classes/Leader";
 import CompareDialog from "./CompareDialog";
 import "./SongListPanel.css";
+import { convertHistoryEntriesToSongsWithHistory } from "../../common/pp-utils";
 
 let addSongToPlaylistCallback: ((song: Song) => void) | null = null;
 
@@ -546,15 +547,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
       // Match C# logic: show CompareDialog if there are history versions
       if (historyEntries && historyEntries.length > 0) {
         // Reconstruct Song objects from history entries
-        const historySongs = historyEntries.map((entry) => {
-          let change = entry.uploader + "@";
-          try {
-            change += new Date(entry.created).toLocaleString();
-          } catch {
-            change += entry.created;
-          }
-          return new Song(entry.songdata.text, entry.songdata.system, change);
-        });
+        const historySongs = convertHistoryEntriesToSongsWithHistory(historyEntries);
         // In History mode, pass all versions (including current) to the dialog
         // The dialog will handle building the version selectors
         this.setState({

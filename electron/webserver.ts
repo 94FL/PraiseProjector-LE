@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { Display } from "../common/pp-types";
-import { compareDisplays } from "../common/pp-utils";
+import { compareDisplays, deserializePlaylist } from "../common/pp-utils";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -821,7 +821,7 @@ export class WebServer {
       const capo = capoStr !== undefined && capoStr !== "" ? parseInt(capoStr, 10) : undefined;
       const instructions = (params.instructions as string) || "";
       const title = (params.title as string) || "";
-      const playlist = (params.playlist as string) || "";
+      const playlist = deserializePlaylist(params.playlist);
 
       console.debug("[WebServer] display_update:", {
         method: req.method,

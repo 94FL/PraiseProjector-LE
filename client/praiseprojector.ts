@@ -16,7 +16,7 @@ import {
 import { ChordSelector } from "../chordpro/chord_selector";
 import { getKeyCodeString, isNumLockEnabled } from "../chordpro/keycodes";
 import { ChordDetails } from "../chordpro/note_system";
-import { CloudApiService } from "../common/cloudApi";
+import { cloudApi } from "../common/cloudApi";
 import { simplifyString } from "../common/stringTools";
 import {
   arrayBufferToBase64,
@@ -438,7 +438,6 @@ export class App extends AppBase {
   private leaderModeAvailable: boolean;
   private leaderMode: boolean;
   private readonly leaderId: string;
-  private readonly api = new CloudApiService();
 
   private isOnline = true;
   private login?: string;
@@ -453,8 +452,8 @@ export class App extends AppBase {
     this.leaderModeAvailable = !!options?.leaderModeAvailable;
     this.leaderMode = !!options?.leaderModeEnabled;
     this.leaderId = options?.leaderId ?? "";
-    if (this.webRoot) this.api.setBaseUrl(this.webRoot.replace(/\/$/, ""));
-    this.api.setClientId(this.clientId ?? "");
+    if (this.webRoot) cloudApi.setBaseUrl(this.webRoot.replace(/\/$/, ""));
+    cloudApi.setClientId(this.clientId ?? "");
     setLogFunction((message, level) => this.log(level + " - " + message));
 
     const vk = virtualKeyboard();
@@ -642,8 +641,8 @@ export class App extends AppBase {
     for (const watcher of this.ppdWatchers?.values() ?? []) this.sendPpdMessage({ op: "off" }, watcher.host, watcher.port);
     this.ppdWatchers = undefined;
     Nearby.closeAll();
-    if (this.iconStartSession) makeVisible(this.iconStartSession, (this.udpEnabled || this.nearbyEnabled) && !this.api.isAuthed());
-    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
+    if (this.iconStartSession) makeVisible(this.iconStartSession, (this.udpEnabled || this.nearbyEnabled) && !cloudApi.isAuthed());
+    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, cloudApi.isAuthed());
     if (this.iconStopSession) makeVisible(this.iconStopSession, false);
     if (this.divNetStatus) makeVisible(this.divNetStatus, this.ppdWatchers != null);
     if (this.btnShare) makeVisible(this.btnShare, true);
@@ -1221,12 +1220,12 @@ export class App extends AppBase {
     this.iconStartSession = document.getElementById("iconStartSession");
     if (this.iconStartSession) {
       this.iconStartSession.onclick = () => this.startPpdSession();
-      makeVisible(this.iconStartSession, !this.api.isAuthed());
+      makeVisible(this.iconStartSession, !cloudApi.isAuthed());
     }
     this.iconStartOnlineSession = document.getElementById("iconStartOnlineSession");
     if (this.iconStartOnlineSession) {
       this.iconStartOnlineSession.onclick = () => this.switchToOnlineSession(true);
-      makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
+      makeVisible(this.iconStartOnlineSession, cloudApi.isAuthed());
     }
     this.iconStopSession = this.hostDevice ? document.getElementById("iconStopSession") : null;
     if (this.iconStopSession) {
@@ -1276,7 +1275,7 @@ export class App extends AppBase {
 
     if (this.mode === "App") {
       setTimeout(() => this.searchExternalSessions(), 100);
-      const calcTimeout = () => (this.api.isAuthed() ? 15 : 60) * 60 * 1000;
+      const calcTimeout = () => (cloudApi.isAuthed() ? 15 : 60) * 60 * 1000;
       const autoupdate = async () => {
         await this.updateDatabase();
         this.searchExternalSessions();
@@ -1298,7 +1297,7 @@ export class App extends AppBase {
     if (this.songsToCheckCountLabel) {
       let lastCheck = 0;
       const todoCheck = async () => {
-        if (this.api.isAuthed() && Date.now() - lastCheck >= 60 * 60 * 1000) {
+        if (cloudApi.isAuthed() && Date.now() - lastCheck >= 60 * 60 * 1000) {
           lastCheck = Date.now();
           this.updatePendingCheckCount();
         }
@@ -1351,7 +1350,7 @@ export class App extends AppBase {
 
     try {
       if (count === undefined) {
-        const peek = await this.api.fetchPeek();
+        const peek = await cloudApi.fetchPeek();
         count = peek?.pendingSongCount ?? 0;
       }
       makeVisible(this.songsToCheckCountLabel, !!count);
@@ -2212,7 +2211,7 @@ export class App extends AppBase {
   private async onLineSel(p: number) {
     if (!this.webRoot || (this.currentDisplay.from <= p && p < this.currentDisplay.to)) return;
     try {
-      await this.api.sendHighlight({
+      await cloudApi.sendHighlight({
         line: p,
         leader: this.leaderId,
         deviceId: this.ppdDeviceId,
@@ -2225,7 +2224,7 @@ export class App extends AppBase {
   private async onLyricsHit(hit: HighlightingParams) {
     if (!this.webRoot || !this.itIsMyOnlineSession || !this.chkHighlight?.checked) return;
     try {
-      await this.api.sendHighlight({
+      await cloudApi.sendHighlight({
         from: hit.from,
         to: hit.to,
         section: hit.section,
@@ -2240,8 +2239,8 @@ export class App extends AppBase {
 
   private requestSong(req: SongRequest) {
     if (this.webRoot)
-      this.api
-        .sendFormPost(
+      cloudApi
+        .sendPost(
           "/display_update",
           {
             id: req.songId,
@@ -2456,7 +2455,7 @@ export class App extends AppBase {
   private async queryEditPermission() {
     let editable = false;
     try {
-      editable = await this.api.checkEditable(this.currentDisplay.songId);
+      editable = await cloudApi.checkEditable(this.currentDisplay.songId);
     } catch (error) {
       if (("" + error).trim() !== "0") this.log("Query edit permission error: " + error);
     }
@@ -2473,7 +2472,7 @@ export class App extends AppBase {
     if (this.highlightIconHolderDiv) makeVisible(this.highlightIconHolderDiv, false);
 
     try {
-      const highlighter = await this.api.fetchHighlightPermission(this.leaderId, this.ppdDeviceId, verifyOnly);
+      const highlighter = await cloudApi.fetchHighlightPermission(this.leaderId, this.ppdDeviceId, verifyOnly);
       if (highlighter === "NOPE" && this.divStartEdit) makeVisible(this.divStartEdit, false);
       const granted = highlighter === "GRANTED";
       if (this.editor) this.editor.onLineSel = granted ? (s) => this.onLineSel(s) : null;
@@ -2728,7 +2727,7 @@ export class App extends AppBase {
             checkBox.onclick = (e) => {
               if (!this.currentDisplay.playlist) this.currentDisplay.playlist = [];
               this.currentDisplay.playlist.push(strip());
-              this.api.abortAll();
+              cloudApi.abortAll();
               this.sendPlaylistUpdateRequest(this.currentDisplay.playlist, (error) => {
                 if (!error) disableRow(songEntry);
               });
@@ -2743,7 +2742,7 @@ export class App extends AppBase {
             checkBox.onclick = (e) => {
               if (item && this.currentDisplay.playlist) {
                 this.currentDisplay.playlist = this.currentDisplay.playlist.filter((x) => x !== item);
-                this.api.abortAll();
+                cloudApi.abortAll();
                 this.sendPlaylistUpdateRequest(this.currentDisplay.playlist, (error) => {
                   if (!error) enableRow();
                 });
@@ -3076,7 +3075,7 @@ export class App extends AppBase {
   }
 
   private async requestSongs(songIds: string[]) {
-    const songs = await this.api.fetchSongsById(songIds, !!this.chkUseCapo?.checked);
+    const songs = await cloudApi.fetchSongsById(songIds, !!this.chkUseCapo?.checked);
     const result = new Map<string, SongEntry>();
     for (const song of songs) {
       if (song.songdata) {
@@ -3217,7 +3216,7 @@ export class App extends AppBase {
       clearTimeout(this.offlineTimeout);
       this.offlineTimeout = null;
     }
-    this.api.abortAll();
+    cloudApi.abortAll();
     this.watchDisplay(true);
     if (this.currentDisplay.songId) this.updateFieldsForUser();
   }
@@ -3248,8 +3247,8 @@ export class App extends AppBase {
       const command = songId ? "song_update" : "display_update";
       const id = songId ?? this.currentDisplay.songId ?? "";
       if (!id) return false;
-      return this.api
-        .sendFormPost(
+      return cloudApi
+        .sendPost(
           `/${command}`,
           {
             id,
@@ -3276,8 +3275,8 @@ export class App extends AppBase {
   }
 
   private sendPlaylistUpdateRequest(playlistItems: SongPreferenceEntry[], cb?: (error?: string | Error) => void) {
-    this.api
-      .sendFormPost("/display_update", { playlist: playlistItems }, { "X-PP-Intent": this._leaderToken ?? "control-update" })
+    cloudApi
+      .sendPost("/display_update", { playlist: playlistItems }, { "X-PP-Intent": this._leaderToken ?? "control-update" })
       .then((result) => cb?.(result !== "DONE" ? result : undefined))
       .catch((code) => cb?.(code));
   }
@@ -3335,7 +3334,7 @@ export class App extends AppBase {
     if (this.selPlaylists) {
       const backup = this.selPlaylists.value;
       try {
-        this.updateLeaderPlaylist(await this.api.fetchLeadersProfiles(), backup);
+        this.updateLeaderPlaylist(await cloudApi.fetchLeadersProfiles(), backup);
         return true;
       } catch (e) {
         this.log("leaders query failed: " + e);
@@ -3346,7 +3345,7 @@ export class App extends AppBase {
 
   private songSearchMode(enabled?: boolean) {
     if (enabled) {
-      this.api.abortAll();
+      cloudApi.abortAll();
       if (this.onlineMode && this.selPlaylists && isVisible(this.selPlaylists)) {
         this.leaderPlaylistSelected();
       } else {
@@ -3365,7 +3364,7 @@ export class App extends AppBase {
 
   private async querySearchOnline(text: string, limit?: number) {
     const duplicates = new Set<string>();
-    const searchResult = (await this.api.searchSongs(text, limit)).filter((x) => {
+    const searchResult = (await cloudApi.searchSongs(text, limit)).filter((x) => {
       if (duplicates.has(x.songId)) return false;
       duplicates.add(x.songId);
       return true;
@@ -3416,7 +3415,7 @@ export class App extends AppBase {
     };
 
     const controller = new AbortController();
-    void this.api
+    void cloudApi
       .fetchDisplayQuery(display, { signal: controller.signal, forced, leaderId: this.onlineMode ? this.leaderId : undefined })
       .then(({ display, ppHeaders }) => {
         if (this.mode === "Client") {
@@ -3453,7 +3452,7 @@ export class App extends AppBase {
         this.sendMarksUpdateRequest();
       } else {
         const id = this.currentDisplay.songId;
-        this.api.abortAll();
+        cloudApi.abortAll();
         setTimeout(() => this.enterMarkingMode(id), 20);
       }
       this.updateEditor();
@@ -3488,7 +3487,7 @@ export class App extends AppBase {
         this.goOnline();
       };
       const attemptSend = () => {
-        this.api
+        cloudApi
           .updateNote(songId, text)
           .then(close)
           .catch(() => {
@@ -3532,8 +3531,8 @@ export class App extends AppBase {
     try {
       if (enterEditMode) {
         if (this.editor.readOnly) {
-          this.api.abortAll();
-          const resp = await this.api.fetchEditSong(this.currentDisplay.songId);
+          cloudApi.abortAll();
+          const resp = await cloudApi.fetchEditSong(this.currentDisplay.songId);
           if (isErrorResponse(resp)) throw resp.error;
           if (resp.version == null) throw "Unknown version from server";
           this.currentDisplay.version = resp.version;
@@ -3554,7 +3553,7 @@ export class App extends AppBase {
         const modified = this.editor.chordProCode;
         if (this.currentDisplay.song !== modified && this.currentDisplay.version != null) {
           if (!(await this.confirm("keep"))) return;
-          const resp = await this.api.suggestSong(this.currentDisplay.songId, this.currentDisplay.version, modified);
+          const resp = await cloudApi.suggestSong(this.currentDisplay.songId, this.currentDisplay.version, modified);
           if (isErrorResponse(resp)) throw resp.error;
           this.currentDisplay.song = resp.songdata?.text ?? modified;
           this.currentDisplay.system = resp.songdata?.system ?? "S";
@@ -3902,11 +3901,11 @@ export class App extends AppBase {
       input.value = leaderId;
       form.append(input);
     }
-    if (this.api.isAuthed()) {
+    if (cloudApi.isAuthed()) {
       const input = document.createElement("input");
       input.type = "text";
       input.name = "pp_auth";
-      input.value = this.api.getAuthorizationHeader();
+      input.value = cloudApi.getAuthorizationHeader();
       form.append(input);
     }
     document.body.append(form);
@@ -4130,10 +4129,10 @@ export class App extends AppBase {
         const localPromise = mode === "WEB" ? undefined : this.scanForLocalServers();
         let webResult: OnlineSessionEntry[] = [];
         if (mode !== "NEARBY") {
-          const webPromise = this.api.fetchOnlineSessions();
+          const webPromise = cloudApi.fetchOnlineSessions();
           await Promise.all([localPromise, webPromise]);
           webResult = await webPromise;
-          if (this.leaderId && this.api.isAuthed()) webResult = webResult.filter((x) => x.id !== this.leaderId);
+          if (this.leaderId && cloudApi.isAuthed()) webResult = webResult.filter((x) => x.id !== this.leaderId);
         }
         const local = localPromise != null ? await localPromise : null;
         const availableSessions = (local ?? []).concat(webResult.filter((x) => local == null || !x.localUrl));
@@ -4258,13 +4257,13 @@ export class App extends AppBase {
   }
 
   private async fetchAllSongFromServer(version?: number, groupId?: string) {
-    const songs = await this.api.fetchAllSongs(version, groupId);
+    const songs = await cloudApi.fetchAllSongs(version, groupId);
     this.sortSongEntries(songs);
     return songs;
   }
 
   private async fetchAllPlaylistFromServer(version?: number) {
-    const profiles = await this.api.fetchLeadersProfiles(version);
+    const profiles = await cloudApi.fetchLeadersProfiles(version);
     const playlists: LeaderPlaylistWithVersion[] = [];
     for (const profile of profiles) {
       for (const playlist of profile.playlists) {
@@ -4306,7 +4305,7 @@ export class App extends AppBase {
     if (!this.currentDisplay.playlist) return true;
     try {
       const listLabel = formatLocalDateLabel(scheduled ?? new Date());
-      const res = await this.api.storeList(forced, {
+      const res = await cloudApi.storeList(forced, {
         label: listLabel,
         scheduled: scheduled?.getTime() ?? 0,
         songs: this.currentDisplay.playlist,
@@ -4579,7 +4578,7 @@ export class App extends AppBase {
       this.hostDevice.pageLoadedSuccessfully();
       if (this.mode === "Client") {
         const name = this.hostDevice.getName() ?? this.hostDevice.getModel();
-        if (name) this.api.setFixedHeader("X-PP-Device-Name", name);
+        if (name) cloudApi.setFixedHeader("X-PP-Device-Name", name);
       } else if (this.mode === "App") setTimeout(() => this.hostDeviceCheck(), 2000);
       this.loadingCircleMaxLevel = 3;
     }
@@ -4589,7 +4588,7 @@ export class App extends AppBase {
     if (!this.hostDevice) return;
     try {
       const curr = this.hostDevice.retrievePreference("initPageVersion");
-      const info = await this.api.fetchDeviceData("initPage");
+      const info = await cloudApi.fetchDeviceData("initPage");
       if (info.error) throw info.error;
       if (curr !== info.version) {
         const resp = await fetch(info.url);
@@ -4603,7 +4602,7 @@ export class App extends AppBase {
   }
 
   public requestImage(resultCallback: ResultCallback, errorCallback: ErrorCallback, forcedImageId?: string) {
-    this.api
+    cloudApi
       .fetchImage(forcedImageId ?? this.lastImageId)
       .then((id) => {
         this.lastImageId = id;
@@ -4688,25 +4687,25 @@ export class App extends AppBase {
     if (token) {
       // Normalize storage location to the currently active host/storage backend.
       this.storeSessionInfo(token);
-      this.api.setToken("Bearer " + token);
+      cloudApi.setToken("Bearer " + token);
     } else {
-      this.api.setToken(null);
+      cloudApi.setToken(null);
     }
     try {
-      const res = await this.api.fetchSession(clientId, { skipRefresh: true });
+      const res = await cloudApi.fetchSession(clientId, { skipRefresh: true });
       if (!res) throw "Invalid response";
       if (isErrorResponse(res)) throw res.error;
       this.login = res.login;
       this.token = res.token;
       if (res.token) {
-        this.api.setToken("Bearer " + res.token);
+        cloudApi.setToken("Bearer " + res.token);
       }
       this.verifyNotifications(res.token, false);
     } catch (error) {
-      if (!this.api.isAuthed()) this.storeSessionInfo("");
+      if (!cloudApi.isAuthed()) this.storeSessionInfo("");
       this.log("Token error: " + error);
       this.login = this.token = undefined;
-      this.api.setToken(null);
+      cloudApi.setToken(null);
     }
   }
 
@@ -4714,8 +4713,8 @@ export class App extends AppBase {
     if (this.token) {
       const clientId = this.clientId ?? "";
       try {
-        this.api.setToken("Bearer " + this.token);
-        const res = await this.api.logoutSession(clientId);
+        cloudApi.setToken("Bearer " + this.token);
+        const res = await cloudApi.logoutSession(clientId);
         if (!res) throw "Invalid response";
         if (isErrorResponse(res)) throw res.error;
         this.login = res.login;
@@ -4725,7 +4724,7 @@ export class App extends AppBase {
         this.login = this.token = undefined;
       } finally {
         this.storeSessionInfo("");
-        this.api.setToken(null);
+        cloudApi.setToken(null);
         this.updateFieldsForUser();
         this.updateDatabase("UPDATE");
       }
@@ -4740,29 +4739,29 @@ export class App extends AppBase {
       const username = login.value;
       const password = key.value;
       if (username && password) {
-        this.api.setToken("Basic " + btoa(username + ":" + password));
+        cloudApi.setToken("Basic " + btoa(username + ":" + password));
         let has_net = true;
         try {
           if (store?.checked) this.verifyClientId();
           const clientId = this.clientId ?? "";
-          const res = (await this.api.fetchSession(clientId, { skipRefresh: true })) as SessionResponse;
+          const res = (await cloudApi.fetchSession(clientId, { skipRefresh: true })) as SessionResponse;
           if (res && isErrorResponse(res)) throw res.error;
           this.login = res.login;
           this.token = res.token;
           this.storeSessionInfo(res.token);
-          this.api.setToken("Bearer " + res.token);
+          cloudApi.setToken("Bearer " + res.token);
           this.verifyNotifications(res.token, true);
           this.updateDatabase("UPDATE");
         } catch (error) {
           has_net = error === 401;
-          if (!this.api.isAuthed()) this.storeSessionInfo("");
-          this.api.setToken(null);
+          if (!cloudApi.isAuthed()) this.storeSessionInfo("");
+          cloudApi.setToken(null);
           if (store) store.checked = false;
           this.log("Auth error: " + error);
           this.login = this.token = undefined;
         }
         if (store?.checked) await this.restoreSessionInfo(); // switch to token auth
-        const success = this.api.isAuthed();
+        const success = cloudApi.isAuthed();
         await this.confirm(success ? "access-granted" : has_net ? "access-denied" : "no-signal", {
           animOnly: success ? 1000 : 1500,
           parent: loginDialog,
@@ -4796,7 +4795,7 @@ export class App extends AppBase {
   private async updateSongCheckList() {
     try {
       const prev = this.songToCheck;
-      const privateList = await this.api.fetchPendingSongs();
+      const privateList = await cloudApi.fetchPendingSongs();
       this.updatePendingCheckCount(privateList.length);
       if (privateList.length > 0) {
         privateList.sort((a, b) => {
@@ -4836,7 +4835,7 @@ export class App extends AppBase {
             : accepted
               ? "APPROVE"
               : "REJECT";
-      const error = await this.api.updatePendingSongState(this.songToCheck.songId, this.songToCheck.version, new_state);
+      const error = await cloudApi.updatePendingSongState(this.songToCheck.songId, this.songToCheck.version, new_state);
       if (error) this.alert("⚠:" + error);
       else if (!(await this.updateSongCheckList())) this.goHome();
     } catch (error) {
@@ -4845,10 +4844,10 @@ export class App extends AppBase {
   }
 
   private async updateFieldsForUser(performQuery = true) {
-    const enableEdit = (this.onlineMode || this.api.isAuthed()) && virtualKeyboard();
-    if (this.iconLogin) makeVisible(this.iconLogin, !this.api.isAuthed());
-    if (this.iconLogout) makeVisible(this.iconLogout, this.api.isAuthed());
-    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
+    const enableEdit = (this.onlineMode || cloudApi.isAuthed()) && virtualKeyboard();
+    if (this.iconLogin) makeVisible(this.iconLogin, !cloudApi.isAuthed());
+    if (this.iconLogout) makeVisible(this.iconLogout, cloudApi.isAuthed());
+    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, cloudApi.isAuthed());
     if (this.iconStartSession) {
       makeVisible(this.iconStartSession, !this.ppdWatchers && (!this.iconStartOnlineSession || !isVisible(this.iconStartOnlineSession)));
       makeDisabled(this.iconStartSession, !this.udpEnabled && !this.nearbyEnabled);
@@ -4856,7 +4855,7 @@ export class App extends AppBase {
     if (this.iconStopSession) makeVisible(this.iconStopSession, this.ppdWatchers != null);
     if (this.divStartEdit) this.divStartEdit.onclick = enableEdit ? () => this.onEditSong(true) : () => this.onNoteButtonClicked(true);
     if (this.divCancelEdit) this.divCancelEdit.onclick = enableEdit ? () => this.onEditSong(false) : () => this.onNoteButtonClicked(false);
-    if (this.iconCheck) makeVisible(this.iconCheck, this.api.isAuthed() && this.mode === "App");
+    if (this.iconCheck) makeVisible(this.iconCheck, cloudApi.isAuthed() && this.mode === "App");
     if (performQuery) {
       if (this.divStartEdit) {
         makeVisible(this.divStartEdit, false);
@@ -4878,11 +4877,11 @@ export class App extends AppBase {
       const clientId = this.genUniqueId();
       if (this.hostDevice) {
         this.hostDevice.storePreference("clientId", this.hostDevice.getName() + ":" + clientId);
-        this.api.setClientId(this.hostDevice.getName() + ":" + clientId);
+        cloudApi.setClientId(this.hostDevice.getName() + ":" + clientId);
       } else {
         const ls = localStorage || window.localStorage;
         if (ls) ls.setItem("clientId", clientId);
-        this.api.setClientId(clientId);
+        cloudApi.setClientId(clientId);
       }
     }
   }

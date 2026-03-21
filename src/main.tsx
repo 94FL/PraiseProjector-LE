@@ -9,6 +9,7 @@ import { installConsoleInterceptor, subscribeToLogs } from "../common/logger";
 import "./index.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "font-awesome/css/font-awesome.min.css";
+import { cloudApi } from "../common/cloudApi";
 
 // Install console interceptor early to capture all logs
 installConsoleInterceptor();
@@ -23,6 +24,13 @@ if (window.electronAPI?.logs?.sendEntry) {
       message: entry.message,
       args: entry.args,
     });
+  });
+}
+
+if (window.electronAPI?.proxyGet && window.electronAPI?.proxyPost) {
+  cloudApi.setProxy({
+    proxyGet: window.electronAPI.proxyGet,
+    proxyPost: window.electronAPI.proxyPost,
   });
 }
 

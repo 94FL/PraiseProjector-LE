@@ -7,9 +7,13 @@ import {
   SongEntry,
   SongFound,
   SongFoundType,
+  SongHistoryEntry,
   SongPreferenceEntry,
 } from "./pp-types";
 import { log, logError } from "./pp-log";
+import { Song } from "../src/classes/Song";
+import { decode, parseAndDecode } from "./io-utils";
+import { playlistEntryCodec } from "./pp-codecs";
 
 export const notPhraseFoundAdditionalCost = 1000;
 
@@ -131,6 +135,10 @@ export function parseSongSetting(s: string): SongPreferenceEntry | null {
     }
   }
 
+  return parseOldSongSettingFormat(s);
+}
+
+function parseOldSongSettingFormat(s: string): SongPreferenceEntry | null {
   const match = /^([-a-fA-F0-9]+)(?:=([^@|:]*))?(?:@([-0-9]+))?(?:\|([0-9]+))?(?::(.*))?$/m.exec(s);
   if (!match) {
     log("Invalid profile entry string: " + s);
@@ -147,4 +155,78 @@ export function parseSongSetting(s: string): SongPreferenceEntry | null {
 export function verifyPlaylist(playlist: PlayList): void {
   if (playlist.scheduled) playlist.scheduled = new Date(playlist.scheduled as unknown as string);
   if (!playlist.label) playlist.label = playlist.scheduled ? formatDateForLabel(playlist.scheduled) : "";
+}
+
+export function convertHistoryEntriyToSongWithHistory(historyEntry: SongHistoryEntry): Song {
+  let change = historyEntry.uploader + "@";
+  try {
+    change += new Date(historyEntry.created).toLocaleString();
+  } catch {
+    change += historyEntry.created;
+  }
+  return new Song(historyEntry.songdata.text, historyEntry.songdata.system, change);
+}
+
+export function convertHistoryEntriesToSongsWithHistory(historyEntries: SongHistoryEntry[]): Song[] {
+  return historyEntries.map((entry) => {
+    return convertHistoryEntriyToSongWithHistory(entry);
+  });
+}
+
+export function deserializePlaylist(playlistRaw: unknown): PlaylistEntry[] | undefined {
+  if (playlistRaw == null) return undefined;
+
+  let normalized: unknown = playlistRaw;
+
+  if (typeof playlistRaw === "string") {
+    const trimmed = playlistRaw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        normalized = JSON.parse(trimmed);
+      } catch (error) {
+        throw new Error(`Invalid playlist JSON array: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else if (trimmed.startsWith("{")) {
+      try {
+        normalized = [JSON.parse(trimmed)];
+      } catch (error) {
+        // Support legacy newline-delimited JSON object entries.
+        normalized = trimmed.split("\n");
+      }
+    } else {
+      // Legacy newline-delimited profile format.
+      normalized = trimmed.split("\n");
+    }
+  }
+
+  if (Array.isArray(normalized)) {
+    const parsed: PlaylistEntry[] = [];
+    for (const entry of normalized) {
+      if (typeof entry === "string") {
+        const line = entry.trim();
+        if (!line) continue;
+        try {
+          parsed.push(parseAndDecode(playlistEntryCodec, line));
+          continue;
+        } catch (error) {
+          logError("Failed to decode playlist entry from string: " + line, error);
+        }
+
+        const legacy = parseOldSongSettingFormat(line);
+        if (!legacy) throw new Error(`Invalid playlist entry string: ${line}`);
+        parsed.push(legacy as PlaylistEntry);
+        continue;
+      }
+
+      try {
+        parsed.push(decode(playlistEntryCodec, entry));
+      } catch (error) {
+        throw new Error(`Invalid playlist entry object: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return parsed;
+  }
+
+  throw new Error(`Unexpected playlist format: ${typeof normalized}`);
 }
