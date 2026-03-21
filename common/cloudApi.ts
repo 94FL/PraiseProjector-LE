@@ -8,8 +8,15 @@ import {
   PendingSongOperation,
   SessionResponse,
   SongDBPendingEntry,
+  SongDBEntry,
+  SongFound,
   SyncRequest,
   SyncResponse,
+  LeaderDBProfile,
+  EditSongResponse,
+  DeviceDataResponse,
+  SuggestResponse,
+  SongPreferenceEntry,
 } from "./pp-types";
 import {
   displayCodec,
@@ -21,6 +28,7 @@ import {
   songHistoryResponseCodec,
   songsResponseCodec,
   syncResponseCodec,
+  editSongResponseCodec,
 } from "./pp-codecs";
 import type { SongHistoryEntry } from "./pp-types";
 
@@ -526,6 +534,180 @@ export class CloudApiService {
       console.debug("Sync", "Display update skipped (server not reachable)", error instanceof Error ? error.message : error);
       return false;
     }
+  }
+
+  // =========================================================================
+  // Additional endpoints for client (praiseprojector.ts)
+  // =========================================================================
+
+  /** Fetch all songs with optional version/group filters */
+  async fetchAllSongs(version?: number, groupId?: string): Promise<SongDBEntry[]> {
+    let endpoint = "/songs";
+    const params: string[] = [];
+    if (groupId) params.push(`group=${encodeURIComponent(groupId)}`);
+    if (version !== undefined) params.push(`version=${version}`);
+    if (params.length > 0) endpoint += "?" + params.join("&");
+    return this.apiCall<SongDBEntry[]>(endpoint);
+  }
+
+  /** Fetch songs by ID list with optional capo preference */
+  async fetchSongsById(ids: string[], useCapo?: boolean): Promise<SongDBEntry[]> {
+    const idParam = ids.map((id) => encodeURIComponent(id)).join(",");
+    let endpoint = `/songs?id=${idParam}`;
+    if (useCapo !== undefined) endpoint += `&useCapo=${useCapo}`;
+    return this.apiCall<SongDBEntry[]>(endpoint);
+  }
+
+  /** Search for songs by text query */
+  async searchSongs(text: string, limit?: number): Promise<SongFound[]> {
+    let endpoint = `/search?text=${encodeURIComponent(text)}`;
+    if (limit !== undefined) endpoint += `&limit=${limit}`;
+    return this.apiCall<SongFound[]>(endpoint);
+  }
+
+  /**
+   * Fetch leader profiles with optional version filter.
+   * Used by the client app; version is optional (omit for full list).
+   */
+  async fetchLeadersProfiles(version?: number): Promise<LeaderDBProfile[]> {
+    const endpoint = version ? `/leaders?version=${version}` : "/leaders";
+    const response = await this.apiCall<unknown>(endpoint);
+    return this.parseResponse(leadersResponseCodec, response);
+  }
+
+  /** Send form-encoded POST request to arbitrary endpoint */
+  async sendFormPost(
+    endpoint: string,
+    formFields: Record<string, string | number | boolean | SongPreferenceEntry[]>,
+    extraHeaders?: Record<string, string>
+  ): Promise<string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...extraHeaders,
+    };
+
+    // Add auth header
+    if (this.authToken) {
+      if (this.authToken.startsWith("Basic ") || this.authToken.startsWith("Bearer ")) {
+        headers["Authorization"] = this.authToken;
+      } else {
+        headers["Authorization"] = `Bearer ${this.authToken}`;
+      }
+    }
+
+    // Check if we're in Electron and should use the proxy
+    const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+
+    if (isElectron && window.electronAPI?.proxyPost) {
+      // Use Electron IPC proxy
+      const formData = new URLSearchParams();
+      for (const [key, value] of Object.entries(formFields)) {
+        if (Array.isArray(value)) {
+          // Handle array of objects (e.g., songs)
+          for (const item of value) {
+            formData.append(key, JSON.stringify(item));
+          }
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+      const result = await window.electronAPI.proxyPost(this.baseUrl, endpoint, formData.toString(), headers);
+      if (result && typeof result === "object" && "error" in result) {
+        const errorResult = result as { error: { message: string; status?: number } };
+        throw new Error(errorResult.error.message);
+      }
+      return typeof result === "string" ? result : JSON.stringify(result);
+    } else {
+      // Web mode: use fetch
+      const formData = new URLSearchParams();
+      for (const [key, value] of Object.entries(formFields)) {
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            formData.append(key, JSON.stringify(item));
+          }
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+
+      const url = `${this.baseUrl}${endpoint}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.text();
+    }
+  }
+
+  /** Save a note/marking for a song */
+  async updateNote(songId: string, text: string): Promise<void> {
+    await this.apiCall<unknown>(`/note?id=${encodeURIComponent(songId)}&text=${encodeURIComponent(text)}`, undefined, { allowEmpty: true });
+  }
+
+  /** Check if the current user has permission to edit a song */
+  async checkEditable(songId: string): Promise<boolean> {
+    return this.apiCall<boolean>(`/editable?songId=${encodeURIComponent(songId)}`);
+  }
+
+  /** Fetch a song locked for editing (returns current version and song text) */
+  async fetchEditSong(id: string): Promise<EditSongResponse> {
+    const response = await this.apiCall<unknown>("/editsong", { id });
+    return this.parseResponse(editSongResponseCodec, response);
+  }
+
+  /** Submit an edited song as a suggestion */
+  async suggestSong(id: string, version: number, song: string): Promise<SuggestResponse> {
+    return this.apiCall<SuggestResponse>("/suggest", { id, version, song });
+  }
+
+  /** Upload (store) a playlist to the server. Returns "OK", "OVERWRITE", or an error string */
+  async storeList(forced: boolean, data: { label: string; scheduled: number; songs: SongPreferenceEntry[] }): Promise<string> {
+    const result = await this.apiCall<string | null>(`/store_list?forced=${forced}`, data, { allowEmpty: true });
+    return result ?? "";
+  }
+
+  /** Fetch device update data (e.g. initPage version/URL for Android) */
+  async fetchDeviceData(data: string): Promise<DeviceDataResponse> {
+    return this.apiCall<DeviceDataResponse>(`/device?data=${encodeURIComponent(data)}`);
+  }
+
+  /** Fetch image by ID. Returns the image identifier/data returned by the server */
+  async fetchImage(id: string): Promise<string> {
+    return this.apiCall<string>(`/image?id=${encodeURIComponent(id)}`);
+  }
+
+  /** Request or verify highlight permission. Returns "GRANTED", "NOPE", or leader name */
+  async fetchHighlightPermission(leader: string, deviceId: string, verifyOnly: boolean): Promise<string> {
+    const mode = verifyOnly ? "verify" : "request";
+    return this.apiCall<string>(`/highlight?permission=${mode}&leader=${encodeURIComponent(leader)}&deviceId=${encodeURIComponent(deviceId)}`);
+  }
+
+  /** Send highlight to server (lyrics line selection) */
+  async sendHighlight(params: {
+    line?: number;
+    from?: number;
+    to?: number;
+    section?: number;
+    leader: string;
+    deviceId?: string;
+    message?: string;
+  }): Promise<void> {
+    let endpoint = "/highlight?";
+    if (params.line !== undefined) endpoint += `line=${params.line}&`;
+    if (params.from !== undefined) endpoint += `from=${params.from}&`;
+    if (params.to !== undefined) endpoint += `to=${params.to}&`;
+    if (params.section !== undefined) endpoint += `section=${params.section}&`;
+    endpoint += `leader=${encodeURIComponent(params.leader)}`;
+    if (params.deviceId) endpoint += `&deviceId=${encodeURIComponent(params.deviceId)}`;
+    if (params.message) endpoint += `&message=${encodeURIComponent(params.message)}`;
+    await this.apiCall<unknown>(endpoint, undefined, { allowEmpty: true });
   }
 }
 
