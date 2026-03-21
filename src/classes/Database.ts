@@ -8,7 +8,7 @@ import { StringExtensions } from "./StringExtensions";
 import { DamerauLevenshtein } from "./DamerauLevenshtein";
 import { FuseSearch } from "./FuseSearch";
 import { PlaylistEntry } from "./PlaylistEntry";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { formatLocalDateLabel, parseScheduleDate } from "../../common/date-only";
 import { LeaderDBProfile, SongDBEntryWithData, SongFoundType } from "../../common/pp-types";
 import { TinyEmitter } from "tiny-emitter";

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useContext, useEffect, ReactNode, useCallback } from "react";
 import { SessionResponse } from "../../common/pp-types";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { cloudApiBaseUrl } from "../config";
 import { Database } from "../classes/Database";
 

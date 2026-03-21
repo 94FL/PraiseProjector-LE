@@ -1,5 +1,5 @@
 import * as t from "io-ts";
-import { decode } from "../../common/io-utils";
+import { decode } from "./io-utils";
 import {
   Display,
   OnlineSessionEntry,
@@ -10,7 +10,7 @@ import {
   SongDBPendingEntry,
   SyncRequest,
   SyncResponse,
-} from "../../common/pp-types";
+} from "./pp-types";
 import {
   displayCodec,
   errorResponseCodec,
@@ -21,8 +21,8 @@ import {
   songHistoryResponseCodec,
   songsResponseCodec,
   syncResponseCodec,
-} from "../../common/pp-codecs";
-import type { SongHistoryEntry } from "../../common/pp-types";
+} from "./pp-codecs";
+import type { SongHistoryEntry } from "./pp-types";
 
 /**
  * Cloud API service for external API calls to praiseprojector.hu
@@ -49,7 +49,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-class CloudApiService {
+export class CloudApiService {
   private authToken: string | null = null;
   private accessTokenExp: number = 0; // unix seconds
   private clientId: string = "";

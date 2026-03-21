@@ -5,7 +5,7 @@ import { Database } from "../classes/Database";
 import { useAuth } from "../contexts/AuthContext";
 import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import CompareDialog from "./CompareDialog";
 import LeaderDataMergeDialog from "./LeaderDataMergeDialog";
 import "./DBSyncDialog.css";

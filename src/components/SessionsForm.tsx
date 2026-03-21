@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useLocalization } from "../localization/LocalizationContext";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../contexts/AuthContext";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { OnlineSessionEntry } from "../../common/pp-types";
 import { P2PSessionInfo } from "../types/electron.d";
 import { webBluetoothService } from "../services/webBluetooth";

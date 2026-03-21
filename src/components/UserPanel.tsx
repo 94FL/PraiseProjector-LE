@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useTooltips } from "../localization/TooltipContext";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { useSettings } from "../hooks/useSettings";
 import { Database } from "../classes/Database";
 import AuthDialog from "./AuthDialog";

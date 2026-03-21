@@ -54,7 +54,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useSessionUrl } from "./hooks/useSessionUrl";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useLocalization } from "./localization/LocalizationContext";
-import { cloudApi } from "./services/cloudApi";
+import { cloudApi } from "./../common/cloudApi";
 import { cloudApiHost } from "./config";
 import { Display, PlaylistEntry as DisplayPlaylistEntry, SongFound, SongDBEntryWithData, LeaderDBProfile } from "../common/pp-types";
 import { playlistEntryCodec, playlistEntryListCodec } from "../common/pp-codecs";

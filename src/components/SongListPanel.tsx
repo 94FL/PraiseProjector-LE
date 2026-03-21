@@ -11,7 +11,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLeader } from "../contexts/LeaderContext";
 import { useMessageBox, ConfirmOptions } from "../contexts/MessageBoxContext";
 import { Settings } from "../types";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { SongPreference } from "../classes/SongPreference";
 import { Leader } from "../classes/Leader";
 import CompareDialog from "./CompareDialog";

@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocalization } from "../../localization/LocalizationContext";
-import { cloudApi } from "../../services/cloudApi";
+import { cloudApi } from "../../../common/cloudApi";
 import { useUpdate } from "../../contexts/UpdateContext";
 import { getSettingsAboutLicenseSections } from "../../about-licenses";
 import "./AboutSettings.css";

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Song } from "../classes/Song";
 import { SongDBPendingEntry, PendingSongOperation, PendingSongState } from "../../common/pp-types";
-import { cloudApi } from "../services/cloudApi";
+import { cloudApi } from "../../common/cloudApi";
 import { useLocalization, StringKey } from "../localization/LocalizationContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useMessageBox } from "../contexts/MessageBoxContext";
