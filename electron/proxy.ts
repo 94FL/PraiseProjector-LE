@@ -331,9 +331,21 @@ export function initializeProxy() {
         headers: applyRequestCookies(url, headers || {}),
       });
       captureResponseCookies(url, response);
+
+      const ppHeaders: Record<string, string> = {};
+      for (const [key, value] of Object.entries(response.headers || {})) {
+        const lowerKey = key.toLowerCase();
+        if (!lowerKey.startsWith("x-pp-")) continue;
+        const headerValue = Array.isArray(value) ? value.join(",") : String(value ?? "");
+        ppHeaders[lowerKey.substring(5)] = headerValue;
+      }
+
       const dataSize = JSON.stringify(response.data).length;
       console.debug(`[Proxy GET] Response: ${url} - Status: ${response.status}, Size: ${dataSize} bytes`);
-      return response.data;
+      return {
+        data: response.data,
+        ppHeaders,
+      };
     } catch (error) {
       console.error(`[Proxy GET] Failed: ${url}`, error);
       if (axios.isAxiosError(error)) {
@@ -377,9 +389,21 @@ export function initializeProxy() {
         }),
       });
       captureResponseCookies(url, response);
+
+      const ppHeaders: Record<string, string> = {};
+      for (const [key, value] of Object.entries(response.headers || {})) {
+        const lowerKey = key.toLowerCase();
+        if (!lowerKey.startsWith("x-pp-")) continue;
+        const headerValue = Array.isArray(value) ? value.join(",") : String(value ?? "");
+        ppHeaders[lowerKey.substring(5)] = headerValue;
+      }
+
       const responseSize = JSON.stringify(response.data).length;
       console.debug(`[Proxy POST] Response: ${url} - Status: ${response.status}, Size: ${responseSize} bytes`);
-      return response.data;
+      return {
+        data: response.data,
+        ppHeaders,
+      };
     } catch (error) {
       console.error(`[Proxy POST] Failed: ${url}`, error);
       if (axios.isAxiosError(error)) {

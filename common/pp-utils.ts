@@ -60,38 +60,6 @@ export function getEmptyDisplay(): Display {
   return { ..._emptyDisplay };
 }
 
-export function parseDisplay(resp: string): Display | null {
-  let match =
-    /^[ ]*(?:#playlist:(.*)\n((?:.|[\r\n])*))?(?:#display_section:([-a-fA-F0-9]*)(@[-0-9]*)?(\|[0-9]+)?\/([0-9]+)-([0-9]+)\n((?:.|[\r\n])*))$/gm.exec(
-      resp
-    );
-  if (!match) match = /^[ ]*#playlist:(.*)\n((?:.|[\r\n])*)$/gm.exec(resp);
-  if (!match) return null;
-  const display = getEmptyDisplay();
-  display.playlist_id = match[1] || "";
-  display.playlist = [];
-  for (const line of (match[2] || "").split("\n")) {
-    const entry = parseSongSetting(line);
-    if (entry?.title) display.playlist.push({ ...entry, title: entry.title });
-  }
-  if (match.length > 3) {
-    if (display.songId !== match[3]) {
-      display.songId = match[3] || "";
-      display.transpose = 0;
-    }
-    if (match[4]) display.transpose = parseInt(match[4].substring(1), 10);
-    if (match[5]) display.capo = parseInt(match[5].substring(1), 10);
-    if (match[6]) display.from = parseInt(match[6], 10);
-    if (match[7]) display.to = parseInt(match[7], 10);
-    if (match[8] && display.song !== match[8]) display.song = match[8] || "";
-  } else {
-    display.song = display.songId = "";
-    display.from = display.to = display.transpose = display.capo = 0;
-  }
-  display.system = "G";
-  return display;
-}
-
 /** Shallow-clone a Display, copying the playlist array reference. */
 export function cloneDisplay(display: Display): Display {
   return { ...display, playlist: display.playlist ? [...display.playlist] : undefined };

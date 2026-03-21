@@ -52,8 +52,17 @@ export interface IElectronAPI {
   getMainWindowDisplayId?: () => Promise<string | null>;
 
   // Proxy operations
-  proxyGet?: (baseUrl: string, path: string, headers?: Record<string, string>) => Promise<unknown>;
-  proxyPost?: (baseUrl: string, path: string, data: unknown, headers?: Record<string, string>) => Promise<unknown>;
+  proxyGet?: (
+    baseUrl: string,
+    path: string,
+    headers?: Record<string, string>
+  ) => Promise<{ data: unknown; ppHeaders: Record<string, string> } | { error: { message: string; status?: number; data?: unknown } }>;
+  proxyPost?: (
+    baseUrl: string,
+    path: string,
+    data: unknown,
+    headers?: Record<string, string>
+  ) => Promise<{ data: unknown; ppHeaders: Record<string, string> } | { error: { message: string; status?: number; data?: unknown } }>;
 
   // General WebServer API request handler
   onWebserverApiRequest?: (

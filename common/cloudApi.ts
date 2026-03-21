@@ -20,7 +20,6 @@ import {
 } from "./pp-types";
 import {
   displayCodec,
-  errorResponseCodec,
   leadersResponseCodec,
   onlineSessionEntryListCodec,
   peekResponseCodec,
@@ -31,12 +30,6 @@ import {
   editSongResponseCodec,
 } from "./pp-codecs";
 import type { SongHistoryEntry } from "./pp-types";
-
-/**
- * Cloud API service for external API calls to praiseprojector.hu
- * Uses Electron proxy in Electron mode, Vite proxy in web dev mode
- */
-import { isRight } from "fp-ts/lib/Either";
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1000;
@@ -57,6 +50,43 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Electron IPC proxy interface for server calls
+ */
+interface IProxyAPI {
+  proxyGet(
+    baseUrl: string,
+    path: string,
+    headers?: Record<string, string>
+  ): Promise<{ data: unknown; ppHeaders: Record<string, string> } | { error: { message: string; status?: number; data?: unknown } }>;
+  proxyPost(
+    baseUrl: string,
+    path: string,
+    data: unknown,
+    headers?: Record<string, string>
+  ): Promise<{ data: unknown; ppHeaders: Record<string, string> } | { error: { message: string; status?: number; data?: unknown } }>;
+}
+
+/**
+ * Safely get the proxyAPI from window if it exists
+ * (window.electronAPI is fully typed in src/types/electron.d.ts as IElectronAPI)
+ */
+function getProxyApi(): IProxyAPI | undefined {
+  if (typeof window === "undefined") return undefined;
+  // Cast to any to avoid type conflicts - the full typing is in electron.d.ts
+  const electronAPI = (window as any).electronAPI;
+  return electronAPI?.proxyGet && electronAPI?.proxyPost ? electronAPI : undefined;
+}
+
+function extractPpHeadersFromFetch(headers: Headers): Record<string, string> {
+  const ppHeaders: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (lower.startsWith("x-pp-")) ppHeaders[lower.substring(5)] = value;
+  });
+  return ppHeaders;
+}
+
 export class CloudApiService {
   private authToken: string | null = null;
   private accessTokenExp: number = 0; // unix seconds
@@ -64,6 +94,9 @@ export class CloudApiService {
   private refreshPromise: Promise<boolean> | null = null;
   // Base URL for API calls (set via setBaseUrl)
   private baseUrl: string = "";
+  // Track in-flight requests for abort support
+  private inFlightRequests = new Map<AbortController, undefined>();
+  private fixedHeaders = new Map<string, string>();
 
   setToken(token: string | null): void {
     this.authToken = token;
@@ -82,6 +115,18 @@ export class CloudApiService {
         }
       }
     }
+  }
+
+  getAuthorizationHeader(): string {
+    return this.authToken ?? "";
+  }
+
+  isAuthed(): boolean {
+    return !!this.authToken;
+  }
+
+  setFixedHeader(name: string, value: string): void {
+    this.fixedHeaders.set(name, value);
   }
 
   setClientId(id: string): void {
@@ -161,33 +206,58 @@ export class CloudApiService {
     return this.baseUrl;
   }
 
+  /**
+   * Abort all in-flight requests (used by praiseprojector.ts to cancel pending operations)
+   */
+  abortAll(): void {
+    for (const controller of this.inFlightRequests.keys()) {
+      try {
+        controller.abort();
+      } catch {
+        // Ignore abort errors
+      }
+    }
+    this.inFlightRequests.clear();
+  }
+
+  private applyCommonHeaders(headers: Record<string, string>): Record<string, string> {
+    const mergedHeaders = { ...headers };
+    for (const [name, value] of this.fixedHeaders) {
+      mergedHeaders[name] = value;
+    }
+    if (this.authToken && !mergedHeaders["Authorization"] && !mergedHeaders["authorization"]) {
+      if (this.authToken.startsWith("Basic ") || this.authToken.startsWith("Bearer ")) {
+        mergedHeaders["Authorization"] = this.authToken;
+      } else {
+        mergedHeaders["Authorization"] = `Bearer ${this.authToken}`;
+      }
+    }
+    return mergedHeaders;
+  }
+
   private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+    return this.applyCommonHeaders({
       "Content-Type": "application/json",
       // Prevent browser from showing its default login dialog on 401
       "X-Requested-With": "XMLHttpRequest",
       "X-PP-Auth-Mode": "v2",
-    };
-    if (this.authToken) {
-      // Token already contains auth type prefix (Bearer or Basic)
-      if (this.authToken.startsWith("Basic ") || this.authToken.startsWith("Bearer ")) {
-        headers["Authorization"] = this.authToken;
-      } else {
-        // Assume it's a bearer token if no prefix
-        headers["Authorization"] = `Bearer ${this.authToken}`;
-      }
+    });
+  }
+
+  private normalizeDecodedValue(value: unknown): unknown {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      return value;
     }
-    return headers;
   }
 
   private parseResponse<T, O>(codec: t.Type<T, O, unknown>, value: unknown): T {
-    try {
-      return decode(codec, value);
-    } catch (error) {
-      const validation = errorResponseCodec.decode(value);
-      if (isRight(validation)) throw new Error(`API error: ${validation.right.error}`);
-      throw error;
-    }
+    const normalized = this.normalizeDecodedValue(value);
+    return decode(codec, normalized);
   }
 
   private async apiCall<T>(
@@ -197,122 +267,139 @@ export class CloudApiService {
   ): Promise<T> {
     const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-    if (options?.signal?.aborted) {
-      throw new Error("aborted");
-    }
+    // Create an AbortController for this request if one isn't provided
+    const controller = new AbortController();
+    const combinedSignal = options?.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
 
-    // Proactively refresh the access token before it expires (the refresh
-    // cookie is handled transparently by the proxy cookie jar / browser).
-    if (!options?.skipRefresh && this.isAccessTokenExpiringSoon()) {
-      console.debug("[CloudApi] apiCall: access token expiring soon, proactive refresh", {
-        endpoint,
-        accessTokenExp: this.accessTokenExp,
-      });
-      await this.refreshSession();
-    }
+    // Track this request for potential abort
+    this.inFlightRequests.set(controller, undefined);
 
-    // Check if we're in Electron and should use the proxy
-    const isElectron = typeof window !== "undefined" && !!window.electronAPI;
-    let refreshAttempted = false;
+    try {
+      if (combinedSignal.aborted) {
+        throw new Error("aborted");
+      }
 
-    for (let attempt = 0; ; attempt++) {
-      const headers = this.getHeaders();
+      // Proactively refresh the access token before it expires (the refresh
+      // cookie is handled transparently by the proxy cookie jar / browser).
+      if (!options?.skipRefresh && this.isAccessTokenExpiringSoon()) {
+        console.debug("[CloudApi] apiCall: access token expiring soon, proactive refresh", {
+          endpoint,
+          accessTokenExp: this.accessTokenExp,
+        });
+        await this.refreshSession();
+      }
 
-      if (isElectron && window.electronAPI?.proxyPost && window.electronAPI?.proxyGet) {
-        // Use Electron IPC proxy to avoid CORS issues
-        let result: unknown;
-        if (postData !== undefined) {
-          result = await window.electronAPI.proxyPost(this.baseUrl, path, postData, headers);
-        } else {
-          result = await window.electronAPI.proxyGet(this.baseUrl, path, headers);
-        }
+      // Check if we're in Electron and should use the proxy
+      const proxyApi = getProxyApi();
+      let refreshAttempted = false;
 
-        if (options?.signal?.aborted) {
-          throw new Error("aborted");
-        }
+      for (let attempt = 0; ; attempt++) {
+        const headers = this.getHeaders();
 
-        // Check for error response from proxy
-        if (result && typeof result === "object" && "error" in result) {
-          const errorResult = result as { error: { message: string; status?: number } };
-          if (errorResult.error.status && isRetryableStatus(errorResult.error.status) && attempt < MAX_RETRIES) {
-            const delay = getRetryDelay(null, attempt);
-            console.warn(`Server returned ${errorResult.error.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await sleep(delay);
-            continue;
+        if (proxyApi) {
+          // Use Electron IPC proxy to avoid CORS issues
+          const result =
+            postData !== undefined
+              ? await proxyApi.proxyPost(this.baseUrl, path, postData as string | Record<string, string>, headers)
+              : await proxyApi.proxyGet(this.baseUrl, path, headers);
+
+          if (combinedSignal.aborted) {
+            throw new Error("aborted");
           }
-          if (errorResult.error.status === 401) {
-            // Try refreshing the access token once before giving up
-            if (!refreshAttempted && !options?.skipRefresh) {
-              refreshAttempted = true;
-              console.debug("[CloudApi] apiCall: Electron proxy returned 401, attempting refresh", { endpoint });
-              if (await this.refreshSession()) {
-                console.debug("[CloudApi] apiCall: refresh after Electron 401 succeeded", { endpoint });
-                continue;
-              }
-              console.debug("[CloudApi] apiCall: refresh after Electron 401 failed", { endpoint });
+
+          // Check for error response from proxy
+          if (result && "error" in result) {
+            const errorResult = result as { error: { message: string; status?: number } };
+            if (errorResult.error.status && isRetryableStatus(errorResult.error.status) && attempt < MAX_RETRIES) {
+              const delay = getRetryDelay(null, attempt);
+              console.warn(`Server returned ${errorResult.error.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+              await sleep(delay);
+              continue;
             }
-            throw new Error("401");
-          }
-          throw new Error(errorResult.error.message || "Unknown error");
-        }
-
-        if (options?.allowEmpty && (result === "" || result == null)) {
-          return null as T;
-        }
-
-        return result as T;
-      } else {
-        const url = `${this.baseUrl}${path}`;
-
-        const response =
-          postData !== undefined
-            ? await fetch(url, {
-                method: "POST",
-                headers,
-                body: JSON.stringify(postData),
-                // Allow HttpOnly session cookie auth in web mode.
-                credentials: "include",
-                signal: options?.signal,
-              })
-            : await fetch(url, {
-                headers,
-                credentials: "include",
-                signal: options?.signal,
-              });
-
-        if (!response.ok) {
-          if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
-            const delay = getRetryDelay(response.headers.get("Retry-After"), attempt);
-            console.warn(`Server returned ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await sleep(delay);
-            continue;
-          }
-          if (response.status === 401) {
-            // Try refreshing the access token once before giving up
-            if (!refreshAttempted && !options?.skipRefresh) {
-              refreshAttempted = true;
-              console.debug("[CloudApi] apiCall: fetch returned 401, attempting refresh", { endpoint });
-              if (await this.refreshSession()) {
-                console.debug("[CloudApi] apiCall: refresh after fetch 401 succeeded", { endpoint });
-                continue;
+            if (errorResult.error.status === 401) {
+              // Clear token on 401 so auth state reflects the failed session.
+              this.authToken = null;
+              // Try refreshing the access token once before giving up
+              if (!refreshAttempted && !options?.skipRefresh) {
+                refreshAttempted = true;
+                console.debug("[CloudApi] apiCall: Electron proxy returned 401, attempting refresh", { endpoint });
+                if (await this.refreshSession()) {
+                  console.debug("[CloudApi] apiCall: refresh after Electron 401 succeeded", { endpoint });
+                  continue;
+                }
+                console.debug("[CloudApi] apiCall: refresh after Electron 401 failed", { endpoint });
               }
-              console.debug("[CloudApi] apiCall: refresh after fetch 401 failed", { endpoint });
+              throw new Error("401");
             }
-            throw new Error("401");
+            throw new Error(errorResult.error.message || "Unknown error");
           }
-          throw new Error(`HTTP ${response.status}`);
-        }
 
-        if (options?.allowEmpty) {
-          const text = await response.text();
-          if (!text.trim()) {
+          // Proxy methods may return { data, ppHeaders }, unwrap payload for generic apiCall consumers.
+          const resultData = result && "data" in result ? (result as { data: unknown }).data : null;
+
+          if (options?.allowEmpty && (resultData === "" || resultData == null)) {
             return null as T;
           }
-          return JSON.parse(text) as T;
-        }
 
-        return response.json() as T;
+          return resultData as T;
+        } else {
+          const url = `${this.baseUrl}${path}`;
+
+          const response =
+            postData !== undefined
+              ? await fetch(url, {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify(postData),
+                  // Allow HttpOnly session cookie auth in web mode.
+                  credentials: "include",
+                  signal: combinedSignal,
+                })
+              : await fetch(url, {
+                  headers,
+                  credentials: "include",
+                  signal: combinedSignal,
+                });
+
+          if (!response.ok) {
+            if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+              const delay = getRetryDelay(response.headers.get("Retry-After"), attempt);
+              console.warn(`Server returned ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+              await sleep(delay);
+              continue;
+            }
+            if (response.status === 401) {
+              // Clear token on 401 so auth state reflects the failed session.
+              this.authToken = null;
+              // Try refreshing the access token once before giving up
+              if (!refreshAttempted && !options?.skipRefresh) {
+                refreshAttempted = true;
+                console.debug("[CloudApi] apiCall: fetch returned 401, attempting refresh", { endpoint });
+                if (await this.refreshSession()) {
+                  console.debug("[CloudApi] apiCall: refresh after fetch 401 succeeded", { endpoint });
+                  continue;
+                }
+                console.debug("[CloudApi] apiCall: refresh after fetch 401 failed", { endpoint });
+              }
+              throw new Error("401");
+            }
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          if (options?.allowEmpty) {
+            const text = await response.text();
+            if (!text.trim()) {
+              return null as T;
+            }
+            return JSON.parse(text) as T;
+          }
+
+          return response.json() as T;
+        }
       }
+    } finally {
+      // Clean up tracking
+      this.inFlightRequests.delete(controller);
     }
   }
 
@@ -402,13 +489,66 @@ export class CloudApiService {
     return this.apiCall<string>(`/psop?id=${encodeURIComponent(songId)}&version=${version}&state=${state}`);
   }
 
-  async fetchDisplayQuery(command: string, options?: { signal?: AbortSignal }): Promise<Display | null> {
+  async fetchDisplayQuery(display: Display, options?: { 
+      signal?: AbortSignal,
+      leaderId?: string,
+      forced?: boolean,
+  }): Promise<{ display: Display; ppHeaders: Record<string, string> }> {
+    let command =
+      "display_query?id=" +
+      display.songId +
+      "&from=" +
+      display.from +
+      "&to=" +
+      display.to +
+      "&transpose=" +
+      display.transpose +
+      "&capo=" +
+      ((display.capo ?? -1) >= 0 ? display.capo : "") +
+      "&playlist_id=" +
+      encodeURIComponent(display.playlist_id || "");
+    if (display.section != null) command += "&section=" + encodeURIComponent(display.section);
+    if (display.instructions != null) command += "&instructions=" + encodeURIComponent(display.instructions);
+    if (display.message != null) command += "&message=" + encodeURIComponent(display.message);
+    if (options?.leaderId) command += "&leader=" + encodeURIComponent(options.leaderId);
+    if (options?.forced) command += "&forced=true";
+
     const path = command.startsWith("/") ? command : `/${command}`;
-    const response = await this.apiCall<unknown>(path, undefined, { ...options, allowEmpty: true });
-    if (response == null || response === "") {
-      return null;
+    const proxyApi = getProxyApi();
+
+    if (proxyApi) {
+      const headers = this.getHeaders();
+      const result = await proxyApi.proxyGet(this.baseUrl, path, headers);
+      if (result && typeof result === "object" && "error" in result) {
+        const errorResult = result as { error: { message?: string; status?: number } };
+        const status = errorResult.error?.status;
+        if (status === 401) this.authToken = null;
+        throw new Error(status ? String(status) : errorResult.error?.message || "Unknown error");
+      }
+      const data = result && typeof result === "object" && "data" in result ? (result as { data: unknown }).data : result;
+      return {
+        display: this.parseResponse(displayCodec, data),
+        ppHeaders:
+          result && typeof result === "object" && "ppHeaders" in result ? ((result as { ppHeaders?: Record<string, string> }).ppHeaders ?? {}) : {},
+      };
     }
-    return this.parseResponse(displayCodec, response);
+
+    // Fallback path for web mode (and older preload implementations).
+    const url = `${this.baseUrl}${path}`;
+    const response = await fetch(url, {
+      headers: this.getHeaders(),
+      credentials: "include",
+      signal: options?.signal,
+    });
+    if (!response.ok) {
+      if (response.status === 401) this.authToken = null;
+      throw new Error(String(response.status));
+    }
+    const text = await response.text();
+    return {
+      display: this.parseResponse(displayCodec, text),
+      ppHeaders: extractPpHeadersFromFetch(response.headers),
+    };
   }
 
   /**
@@ -466,33 +606,24 @@ export class CloudApiService {
       console.info("Sync", "Sending display update");
 
       // Build headers with form encoding
-      const headers: Record<string, string> = {
+      const headers = this.applyCommonHeaders({
         "Content-Type": "application/x-www-form-urlencoded",
         "X-PP-Intent": "control-update",
-      };
-
-      // Add authorization header
-      if (this.authToken) {
-        if (this.authToken.startsWith("Basic ") || this.authToken.startsWith("Bearer ")) {
-          headers["Authorization"] = this.authToken;
-        } else {
-          headers["Authorization"] = `Bearer ${this.authToken}`;
-        }
-      }
+      });
 
       // Check if we're in Electron and should use the proxy
-      const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+      const proxyApi = getProxyApi();
 
-      if (isElectron && window.electronAPI?.proxyPost) {
+      if (proxyApi) {
         // Use Electron IPC proxy - send form data as URLSearchParams string
         const formData = new URLSearchParams();
         for (const [key, value] of Object.entries(values)) {
           formData.append(key, value);
         }
-        const result = await window.electronAPI.proxyPost(this.baseUrl, "/display_update", formData.toString(), headers);
+        const result = await proxyApi.proxyPost(this.baseUrl, "/display_update", formData.toString(), headers);
 
         // Check for error response from proxy
-        if (result && typeof result === "object" && "error" in result) {
+        if (result && "error" in result) {
           const errorResult = result as { error: { message: string; status?: number } };
           console.warn("Sync", `Display update failed: ${errorResult.error.message}`);
           return false;
@@ -581,24 +712,15 @@ export class CloudApiService {
     formFields: Record<string, string | number | boolean | SongPreferenceEntry[]>,
     extraHeaders?: Record<string, string>
   ): Promise<string> {
-    const headers: Record<string, string> = {
+    const headers = this.applyCommonHeaders({
       "Content-Type": "application/x-www-form-urlencoded",
       ...extraHeaders,
-    };
-
-    // Add auth header
-    if (this.authToken) {
-      if (this.authToken.startsWith("Basic ") || this.authToken.startsWith("Bearer ")) {
-        headers["Authorization"] = this.authToken;
-      } else {
-        headers["Authorization"] = `Bearer ${this.authToken}`;
-      }
-    }
+    });
 
     // Check if we're in Electron and should use the proxy
-    const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+    const proxyApi = getProxyApi();
 
-    if (isElectron && window.electronAPI?.proxyPost) {
+    if (proxyApi) {
       // Use Electron IPC proxy
       const formData = new URLSearchParams();
       for (const [key, value] of Object.entries(formFields)) {
@@ -611,12 +733,13 @@ export class CloudApiService {
           formData.append(key, String(value));
         }
       }
-      const result = await window.electronAPI.proxyPost(this.baseUrl, endpoint, formData.toString(), headers);
-      if (result && typeof result === "object" && "error" in result) {
+      const result = await proxyApi.proxyPost(this.baseUrl, endpoint, formData.toString(), headers);
+      if (result && "error" in result) {
         const errorResult = result as { error: { message: string; status?: number } };
         throw new Error(errorResult.error.message);
       }
-      return typeof result === "string" ? result : JSON.stringify(result);
+      const payload = result && "data" in result ? (result as { data: unknown }).data : result;
+      return typeof payload === "string" ? payload : JSON.stringify(payload);
     } else {
       // Web mode: use fetch
       const formData = new URLSearchParams();

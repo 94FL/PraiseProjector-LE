@@ -15,18 +15,8 @@ import {
 } from "../chordpro/chordpro_editor";
 import { ChordSelector } from "../chordpro/chord_selector";
 import { getKeyCodeString, isNumLockEnabled } from "../chordpro/keycodes";
-import {
-  abortAllRequests,
-  ErrorCallback,
-  getAuthorizationHeader,
-  isAuthed,
-  JSONValue,
-  ResultCallback,
-  sendHttpRequest,
-  setAuthorizationHeader,
-  setFixedHeader,
-} from "./nettools";
 import { ChordDetails } from "../chordpro/note_system";
+import { CloudApiService } from "../common/cloudApi";
 import { simplifyString } from "../common/stringTools";
 import {
   arrayBufferToBase64,
@@ -61,13 +51,9 @@ import {
   SongFound,
   SongFoundType,
   OnlineSessionEntry,
-  EditSongResponse,
-  SuggestResponse,
   SessionResponse,
   PpdMessage,
   PpdMessageInternal,
-  DeviceDataResponse,
-  SongDBPendingEntry,
   PendingSongState,
   PendingSongOperation,
 } from "../common/pp-types";
@@ -81,9 +67,12 @@ import { getAboutBoxHtml } from "./about";
 import { DeviceMessage, PpdPacket, HostDevice, Nearby, NearbyMessageParam, HostDeviceInfoType } from "./host-device";
 import { Settings } from "../common/settings";
 import { formatLocalDateLabel } from "../common/date-only";
-import { entryIsFound, getEmptyDisplay, parseDisplay, verifyPlaylist } from "../common/pp-utils";
+import { entryIsFound, getEmptyDisplay, verifyPlaylist } from "../common/pp-utils";
 
 export const praiseProjectorOrigin = "https://praiseprojector.com";
+
+type ResultCallback = (result: string, ppHeaders: { [key: string]: string }) => void;
+type ErrorCallback = (error: Error) => void;
 
 const debugLog = false;
 
@@ -449,6 +438,7 @@ export class App extends AppBase {
   private leaderModeAvailable: boolean;
   private leaderMode: boolean;
   private readonly leaderId: string;
+  private readonly api = new CloudApiService();
 
   private isOnline = true;
   private login?: string;
@@ -463,6 +453,8 @@ export class App extends AppBase {
     this.leaderModeAvailable = !!options?.leaderModeAvailable;
     this.leaderMode = !!options?.leaderModeEnabled;
     this.leaderId = options?.leaderId ?? "";
+    if (this.webRoot) this.api.setBaseUrl(this.webRoot.replace(/\/$/, ""));
+    this.api.setClientId(this.clientId ?? "");
     setLogFunction((message, level) => this.log(level + " - " + message));
 
     const vk = virtualKeyboard();
@@ -555,7 +547,7 @@ export class App extends AppBase {
           case "display":
             if (message.device == this.ppdWatch?.device) {
               if (message.display) {
-                const display = typeof message.display === "string" ? parseDisplay(message.display) : message.display;
+                const display = message.display;
                 if (display) this.applyDisplay(display);
                 else this.log("Invalid display arrived: " + message.display);
               } else this.log("No display in 'display' packet");
@@ -650,8 +642,8 @@ export class App extends AppBase {
     for (const watcher of this.ppdWatchers?.values() ?? []) this.sendPpdMessage({ op: "off" }, watcher.host, watcher.port);
     this.ppdWatchers = undefined;
     Nearby.closeAll();
-    if (this.iconStartSession) makeVisible(this.iconStartSession, (this.udpEnabled || this.nearbyEnabled) && !isAuthed());
-    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, isAuthed());
+    if (this.iconStartSession) makeVisible(this.iconStartSession, (this.udpEnabled || this.nearbyEnabled) && !this.api.isAuthed());
+    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
     if (this.iconStopSession) makeVisible(this.iconStopSession, false);
     if (this.divNetStatus) makeVisible(this.divNetStatus, this.ppdWatchers != null);
     if (this.btnShare) makeVisible(this.btnShare, true);
@@ -1229,12 +1221,12 @@ export class App extends AppBase {
     this.iconStartSession = document.getElementById("iconStartSession");
     if (this.iconStartSession) {
       this.iconStartSession.onclick = () => this.startPpdSession();
-      makeVisible(this.iconStartSession, !isAuthed());
+      makeVisible(this.iconStartSession, !this.api.isAuthed());
     }
     this.iconStartOnlineSession = document.getElementById("iconStartOnlineSession");
     if (this.iconStartOnlineSession) {
       this.iconStartOnlineSession.onclick = () => this.switchToOnlineSession(true);
-      makeVisible(this.iconStartOnlineSession, isAuthed());
+      makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
     }
     this.iconStopSession = this.hostDevice ? document.getElementById("iconStopSession") : null;
     if (this.iconStopSession) {
@@ -1284,7 +1276,7 @@ export class App extends AppBase {
 
     if (this.mode === "App") {
       setTimeout(() => this.searchExternalSessions(), 100);
-      const calcTimeout = () => (isAuthed() ? 15 : 60) * 60 * 1000;
+      const calcTimeout = () => (this.api.isAuthed() ? 15 : 60) * 60 * 1000;
       const autoupdate = async () => {
         await this.updateDatabase();
         this.searchExternalSessions();
@@ -1306,7 +1298,7 @@ export class App extends AppBase {
     if (this.songsToCheckCountLabel) {
       let lastCheck = 0;
       const todoCheck = async () => {
-        if (isAuthed() && Date.now() - lastCheck >= 60 * 60 * 1000) {
+        if (this.api.isAuthed() && Date.now() - lastCheck >= 60 * 60 * 1000) {
           lastCheck = Date.now();
           this.updatePendingCheckCount();
         }
@@ -1359,7 +1351,7 @@ export class App extends AppBase {
 
     try {
       if (count === undefined) {
-        const peek = await this.requestAppData<{ pendingSongCount?: number }>("peek");
+        const peek = await this.api.fetchPeek();
         count = peek?.pendingSongCount ?? 0;
       }
       makeVisible(this.songsToCheckCountLabel, !!count);
@@ -2217,68 +2209,14 @@ export class App extends AppBase {
     }
   }
 
-  private async requestAppData<T = JSONValue>(url: string, postData?: JSONValue) {
-    return new Promise<T>((resolve, reject) => {
-      this.sendHttpRequest(
-        this.webRoot + url,
-        (result) => {
-          let json: T;
-          try {
-            json = JSON.parse(result);
-          } catch (error) {
-            reject(error);
-            return;
-          }
-          resolve(json);
-        },
-        (error) => {
-          reject(error);
-        },
-        postData,
-        "application/json"
-      );
-    });
-  }
-
-  private sendHttpRequest(
-    url: string,
-    cb: ResultCallback,
-    errcb?: ErrorCallback,
-    postData?: Map<string, string> | JSONValue,
-    accept?: string,
-    extraHeaders?: Map<string, string>
-  ) {
-    const dp = url.match(/display_query/);
-    if (!dp) this.setNetworkState("transfer");
-    const handleDisplayReq = (result?: string) => {
-      if (dp && this.onSongDisplayed.songId && (!result || this.onSongDisplayed.songId === parseDisplay(result)?.songId)) {
-        this.onSongDisplayed.songId = "";
-        this.onSongDisplayed.cb();
-      }
-    };
-    return sendHttpRequest(
-      url,
-      (result, headers) => {
-        this.setNetworkState("online");
-        cb(result, headers);
-        handleDisplayReq(result);
-      },
-      (error) => {
-        this.setNetworkState("offline");
-        if (("" + error).trim() !== "0") this.log("Network error on query " + url + ": " + error);
-        if (errcb) errcb(error);
-        handleDisplayReq();
-      },
-      postData,
-      accept,
-      extraHeaders
-    );
-  }
-
   private async onLineSel(p: number) {
     if (!this.webRoot || (this.currentDisplay.from <= p && p < this.currentDisplay.to)) return;
     try {
-      await this.requestAppData<string>("highlight?line=" + p + "&leader=" + this.leaderId + "&deviceId=" + this.ppdDeviceId);
+      await this.api.sendHighlight({
+        line: p,
+        leader: this.leaderId,
+        deviceId: this.ppdDeviceId,
+      });
     } catch (error) {
       if (error) this.log("Error sending highlight line selection: " + p + " error: " + error);
     }
@@ -2287,18 +2225,14 @@ export class App extends AppBase {
   private async onLyricsHit(hit: HighlightingParams) {
     if (!this.webRoot || !this.itIsMyOnlineSession || !this.chkHighlight?.checked) return;
     try {
-      await this.requestAppData<string>(
-        "highlight?from=" +
-          hit.from +
-          "&leader=" +
-          this.leaderId +
-          "&deviceId=" +
-          encodeURIComponent(this.ppdDeviceId) +
-          (hit.to != null ? "&to=" + hit.to : "") +
-          (hit.section != null ? "&section=" + hit.section : "") +
-          "&message=" +
-          encodeURIComponent(hit.lyrics)
-      );
+      await this.api.sendHighlight({
+        from: hit.from,
+        to: hit.to,
+        section: hit.section,
+        leader: this.leaderId,
+        deviceId: this.ppdDeviceId,
+        message: hit.lyrics,
+      });
     } catch (error) {
       if (error) this.log("Error sending highlight message: " + hit.lyrics + " error: " + error);
     }
@@ -2306,23 +2240,22 @@ export class App extends AppBase {
 
   private requestSong(req: SongRequest) {
     if (this.webRoot)
-      this.sendHttpRequest(
-        this.webRoot + "display_update",
-        (resp) => {
-          //if (resp) this.log("Song update resp: " + resp);
-          if (this.inOptions) this.closeOptions(!this.landscape);
-        },
-        (code) => {
+      this.api
+        .sendFormPost(
+          "/display_update",
+          {
+            id: req.songId,
+            transpose: req.transpose?.toString() ?? "",
+            capo: req.capo?.toString() ?? "",
+          },
+          { "X-PP-Intent": this._leaderToken ?? "control-update" }
+        )
+        .then(() => {
+          if (this.inOptions) void this.closeOptions(!this.landscape);
+        })
+        .catch((code) => {
           this.log("Cannot update song: " + req.songId + " error: " + code);
-        },
-        new Map<string, string>([
-          ["id", req.songId],
-          ["transpose", req.transpose?.toString() ?? ""],
-          ["capo", req.capo?.toString() ?? ""],
-        ]),
-        undefined,
-        new Map<string, string>([["X-PP-Intent", this._leaderToken ?? "control-update"]])
-      );
+        });
   }
 
   private transpose(new_transpose: number, draw = true) {
@@ -2523,7 +2456,7 @@ export class App extends AppBase {
   private async queryEditPermission() {
     let editable = false;
     try {
-      editable = (await this.requestAppData("editable?songId=" + this.currentDisplay.songId)) === true;
+      editable = await this.api.checkEditable(this.currentDisplay.songId);
     } catch (error) {
       if (("" + error).trim() !== "0") this.log("Query edit permission error: " + error);
     }
@@ -2540,9 +2473,7 @@ export class App extends AppBase {
     if (this.highlightIconHolderDiv) makeVisible(this.highlightIconHolderDiv, false);
 
     try {
-      const highlighter = await this.requestAppData<string>(
-        "highlight?permission=" + (verifyOnly ? "verify" : "request") + "&leader=" + this.leaderId + "&deviceId=" + this.ppdDeviceId
-      );
+      const highlighter = await this.api.fetchHighlightPermission(this.leaderId, this.ppdDeviceId, verifyOnly);
       if (highlighter === "NOPE" && this.divStartEdit) makeVisible(this.divStartEdit, false);
       const granted = highlighter === "GRANTED";
       if (this.editor) this.editor.onLineSel = granted ? (s) => this.onLineSel(s) : null;
@@ -2797,7 +2728,7 @@ export class App extends AppBase {
             checkBox.onclick = (e) => {
               if (!this.currentDisplay.playlist) this.currentDisplay.playlist = [];
               this.currentDisplay.playlist.push(strip());
-              abortAllRequests();
+              this.api.abortAll();
               this.sendPlaylistUpdateRequest(this.currentDisplay.playlist, (error) => {
                 if (!error) disableRow(songEntry);
               });
@@ -2812,7 +2743,7 @@ export class App extends AppBase {
             checkBox.onclick = (e) => {
               if (item && this.currentDisplay.playlist) {
                 this.currentDisplay.playlist = this.currentDisplay.playlist.filter((x) => x !== item);
-                abortAllRequests();
+                this.api.abortAll();
                 this.sendPlaylistUpdateRequest(this.currentDisplay.playlist, (error) => {
                   if (!error) enableRow();
                 });
@@ -3009,10 +2940,6 @@ export class App extends AppBase {
     return firstSong;
   }
 
-  private parsePlayListEntries(data: string): SongEntry[] {
-    return JSON.parse(data);
-  }
-
   private playListInitalUpdate = true;
 
   private processPlayListData(entries: SongEntry[] | SongFound[]) {
@@ -3149,23 +3076,15 @@ export class App extends AppBase {
   }
 
   private async requestSongs(songIds: string[]) {
-    return new Promise<Map<string, SongEntry>>((resolve, reject) => {
-      this.sendHttpRequest(
-        this.webRoot + "songs?id=" + songIds.join(",") + (this.chkUseCapo?.checked ? "&capo=" : ""),
-        (resp) => {
-          const songs: SongEntry[] = JSON.parse(resp); // this.parseSongsReponse(resp)
-          const m = new Map<string, SongEntry>();
-          for (const song of songs)
-            if (song.songdata) {
-              // next line required because of desktop server cannot serialize int as undefined
-              if (typeof song.capo === "number" && song.capo < 0) song.capo = undefined;
-              m.set(song.songId, song);
-            }
-          resolve(m);
-        },
-        reject
-      );
-    });
+    const songs = await this.api.fetchSongsById(songIds, !!this.chkUseCapo?.checked);
+    const result = new Map<string, SongEntry>();
+    for (const song of songs) {
+      if (song.songdata) {
+        if (typeof song.capo === "number" && song.capo < 0) song.capo = undefined;
+        result.set(song.songId, song);
+      }
+    }
+    return result;
   }
 
   private async verifyNeighbouringSongs(next?: boolean, useCapoChangedOnly?: boolean) {
@@ -3298,7 +3217,7 @@ export class App extends AppBase {
       clearTimeout(this.offlineTimeout);
       this.offlineTimeout = null;
     }
-    abortAllRequests();
+    this.api.abortAll();
     this.watchDisplay(true);
     if (this.currentDisplay.songId) this.updateFieldsForUser();
   }
@@ -3329,25 +3248,22 @@ export class App extends AppBase {
       const command = songId ? "song_update" : "display_update";
       const id = songId ?? this.currentDisplay.songId ?? "";
       if (!id) return false;
-      return new Promise<void>((resolve, reject) =>
-        this.sendHttpRequest(
-          this.webRoot + command,
-          (res) => {
-            this.log(res);
-            resolve();
+      return this.api
+        .sendFormPost(
+          `/${command}`,
+          {
+            id,
+            [key]: value,
           },
-          (code) => {
-            this.log("Cannot update preference: " + code);
-            reject(code);
-          },
-          new Map<string, string>([
-            ["id", id],
-            [key, value],
-          ]),
-          undefined,
-          new Map<string, string>([["X-PP-Intent", this._leaderToken ?? "control-update"]])
+          { "X-PP-Intent": this._leaderToken ?? "control-update" }
         )
-      );
+        .then((res) => {
+          this.log(res);
+        })
+        .catch((code) => {
+          this.log("Cannot update preference: " + code);
+          throw code;
+        });
     }
   }
 
@@ -3360,14 +3276,10 @@ export class App extends AppBase {
   }
 
   private sendPlaylistUpdateRequest(playlistItems: SongPreferenceEntry[], cb?: (error?: string | Error) => void) {
-    this.sendHttpRequest(
-      this.webRoot + "display_update",
-      (result) => cb?.(result !== "DONE" ? result : undefined),
-      (code) => cb?.(code),
-      new Map<string, string>([["playlist", playlistItems.map((x) => JSON.stringify(x)).join("\n")]]),
-      undefined,
-      new Map<string, string>([["X-PP-Intent", this._leaderToken ?? "control-update"]])
-    );
+    this.api
+      .sendFormPost("/display_update", { playlist: playlistItems }, { "X-PP-Intent": this._leaderToken ?? "control-update" })
+      .then((result) => cb?.(result !== "DONE" ? result : undefined))
+      .catch((code) => cb?.(code));
   }
 
   private leaderPlaylistSelected() {
@@ -3394,8 +3306,7 @@ export class App extends AppBase {
     }
   }
 
-  private updateLeaderPlaylist(profiledata: string, prevsel: string) {
-    const profiles = this.parseLeaderResponse(profiledata);
+  private updateLeaderPlaylist(profiles: LeaderDBProfile[], prevsel: string) {
     if (this.selPlaylists) {
       while (this.selPlaylists.firstChild) this.selPlaylists.removeChild(this.selPlaylists.firstChild);
       let allpl: { id: string; leaderName: string; label: string }[] = [];
@@ -3424,8 +3335,7 @@ export class App extends AppBase {
     if (this.selPlaylists) {
       const backup = this.selPlaylists.value;
       try {
-        const playlist = new Promise<string>((resolve, reject) => this.sendHttpRequest(this.webRoot + "leaders", resolve, reject));
-        this.updateLeaderPlaylist(await playlist, backup);
+        this.updateLeaderPlaylist(await this.api.fetchLeadersProfiles(), backup);
         return true;
       } catch (e) {
         this.log("leaders query failed: " + e);
@@ -3436,7 +3346,7 @@ export class App extends AppBase {
 
   private songSearchMode(enabled?: boolean) {
     if (enabled) {
-      abortAllRequests();
+      this.api.abortAll();
       if (this.onlineMode && this.selPlaylists && isVisible(this.selPlaylists)) {
         this.leaderPlaylistSelected();
       } else {
@@ -3454,21 +3364,13 @@ export class App extends AppBase {
   private lastSearchResult: SongEntry[] = [];
 
   private async querySearchOnline(text: string, limit?: number) {
-    return new Promise<SongEntry[]>((resolve, reject) =>
-      this.sendHttpRequest(
-        this.webRoot + "search?text=" + encodeURIComponent(text) + (limit !== undefined ? "&limit=" + limit : ""),
-        (resp) => {
-          const duplicates = new Set<string>();
-          const searchResult = this.parsePlayListEntries(resp).filter((x) => {
-            if (duplicates.has(x.songId)) return false;
-            duplicates.add(x.songId);
-            return true;
-          });
-          resolve(searchResult);
-        },
-        reject
-      )
-    );
+    const duplicates = new Set<string>();
+    const searchResult = (await this.api.searchSongs(text, limit)).filter((x) => {
+      if (duplicates.has(x.songId)) return false;
+      duplicates.add(x.songId);
+      return true;
+    });
+    return searchResult;
   }
 
   private async onSearchTextChanged(allowSelectAll?: boolean) {
@@ -3513,49 +3415,26 @@ export class App extends AppBase {
       message: this.currentDisplay.message,
     };
 
-    let url =
-      this.webRoot +
-      "display_query?id=" +
-      display.songId +
-      "&from=" +
-      display.from +
-      "&to=" +
-      display.to +
-      "&transpose=" +
-      display.transpose +
-      "&capo=" +
-      ((display.capo ?? -1) >= 0 ? display.capo : "") +
-      "&playlist_id=" +
-      display.playlist_id;
-    if (display.section != null) url += "&section=" + display.section;
-    if (display.instructions != null) url += "&instructions=" + encodeURIComponent(display.instructions);
-    if (display.message != null) url += "&message=" + encodeURIComponent(display.message);
-    if (this.onlineMode) url += "&leader=" + this.leaderId;
-    if (forced) url += "&forced=true";
-
-    return this.sendHttpRequest(
-      url,
-      (resp, headers) => {
-        let newDisplay: Display;
+    const controller = new AbortController();
+    void this.api
+      .fetchDisplayQuery(display, { signal: controller.signal, forced, leaderId: this.onlineMode ? this.leaderId : undefined })
+      .then(({ display, ppHeaders }) => {
         if (this.mode === "Client") {
-          const leaderModeAvailable = headers["leader-available"] === "true";
+          const leaderModeAvailable = ppHeaders["leader-available"] === "true";
           if (this.leaderModeAvailable !== leaderModeAvailable) {
             this.leaderModeAvailable = leaderModeAvailable;
-            this.leaderMode = this.leaderModeAvailable && headers["leader-enabled"] === "true";
+            this.leaderMode = this.leaderModeAvailable && ppHeaders["leader-enabled"] === "true";
             this.applyLeaderModeRestrictions();
           }
         }
-        if (headers["token"]) this._leaderToken = headers["token"];
-        try {
-          newDisplay = JSON.parse(resp);
-        } catch (error) {
-          if (resp.startsWith("{")) this.log("JSON parse error on display_query response: " + error);
-          newDisplay = parseDisplay(resp) ?? getEmptyDisplay();
-        }
-        resultCallback(newDisplay);
-      },
-      errorCallback
-    );
+        if (ppHeaders["token"]) this._leaderToken = ppHeaders["token"];
+        resultCallback(display);
+      })
+      .catch((error) => errorCallback(error instanceof Error ? error : new Error(String(error))));
+
+    return {
+      abort: () => controller.abort(),
+    };
   }
 
   private updateEditIconsByState() {
@@ -3574,7 +3453,7 @@ export class App extends AppBase {
         this.sendMarksUpdateRequest();
       } else {
         const id = this.currentDisplay.songId;
-        abortAllRequests();
+        this.api.abortAll();
         setTimeout(() => this.enterMarkingMode(id), 20);
       }
       this.updateEditor();
@@ -3602,15 +3481,22 @@ export class App extends AppBase {
   private sendMarksUpdateRequest() {
     if (this.webRoot && this.currentDisplay && this.currentDisplay.songId && this.editor) {
       let retryCount = 3;
-      const url = this.webRoot + "note?id=" + this.currentDisplay.songId + "&text=" + this.editor.marks;
+      const songId = this.currentDisplay.songId;
+      const text = this.editor.marks;
       const close = () => {
         this.updateEditIconsByState();
         this.goOnline();
       };
-      this.sendHttpRequest(url, close, () => {
-        if (--retryCount > 0) setTimeout(() => this.sendMarksUpdateRequest(), 1000);
-        else close();
-      });
+      const attemptSend = () => {
+        this.api
+          .updateNote(songId, text)
+          .then(close)
+          .catch(() => {
+            if (--retryCount > 0) setTimeout(attemptSend, 1000);
+            else close();
+          });
+      };
+      attemptSend();
     }
   }
 
@@ -3646,10 +3532,8 @@ export class App extends AppBase {
     try {
       if (enterEditMode) {
         if (this.editor.readOnly) {
-          abortAllRequests();
-          const resp = (await this.requestAppData("editsong", {
-            id: this.currentDisplay.songId,
-          })) as EditSongResponse;
+          this.api.abortAll();
+          const resp = await this.api.fetchEditSong(this.currentDisplay.songId);
           if (isErrorResponse(resp)) throw resp.error;
           if (resp.version == null) throw "Unknown version from server";
           this.currentDisplay.version = resp.version;
@@ -3670,11 +3554,7 @@ export class App extends AppBase {
         const modified = this.editor.chordProCode;
         if (this.currentDisplay.song !== modified && this.currentDisplay.version != null) {
           if (!(await this.confirm("keep"))) return;
-          const resp = (await this.requestAppData("suggest", {
-            id: this.currentDisplay.songId,
-            version: this.currentDisplay.version,
-            song: modified,
-          })) as SuggestResponse;
+          const resp = await this.api.suggestSong(this.currentDisplay.songId, this.currentDisplay.version, modified);
           if (isErrorResponse(resp)) throw resp.error;
           this.currentDisplay.song = resp.songdata?.text ?? modified;
           this.currentDisplay.system = resp.songdata?.system ?? "S";
@@ -4022,11 +3902,11 @@ export class App extends AppBase {
       input.value = leaderId;
       form.append(input);
     }
-    if (isAuthed()) {
+    if (this.api.isAuthed()) {
       const input = document.createElement("input");
       input.type = "text";
       input.name = "pp_auth";
-      input.value = getAuthorizationHeader();
+      input.value = this.api.getAuthorizationHeader();
       form.append(input);
     }
     document.body.append(form);
@@ -4250,10 +4130,10 @@ export class App extends AppBase {
         const localPromise = mode === "WEB" ? undefined : this.scanForLocalServers();
         let webResult: OnlineSessionEntry[] = [];
         if (mode !== "NEARBY") {
-          const webPromise = this.requestAppData("view_session?list=only");
+          const webPromise = this.api.fetchOnlineSessions();
           await Promise.all([localPromise, webPromise]);
-          webResult = (await webPromise) as OnlineSessionEntry[];
-          if (this.leaderId && isAuthed()) webResult = webResult.filter((x) => x.id !== this.leaderId);
+          webResult = await webPromise;
+          if (this.leaderId && this.api.isAuthed()) webResult = webResult.filter((x) => x.id !== this.leaderId);
         }
         const local = localPromise != null ? await localPromise : null;
         const availableSessions = (local ?? []).concat(webResult.filter((x) => local == null || !x.localUrl));
@@ -4378,40 +4258,20 @@ export class App extends AppBase {
   }
 
   private async fetchAllSongFromServer(version?: number, groupId?: string) {
-    let url = "songs";
-    if (groupId) url += "?group=" + groupId;
-    if (version) url += (groupId ? "&" : "?") + "version=" + version;
-    const songs = (await this.requestAppData(url)) as SongDBEntry[];
+    const songs = await this.api.fetchAllSongs(version, groupId);
     this.sortSongEntries(songs);
     return songs;
   }
 
-  private parseLeaderResponse(resp: string): LeaderDBProfile[] {
-    const array: LeaderDBProfile[] = JSON.parse(resp);
-    for (const elem of array) {
-      for (const pelem of elem.playlists) {
-        if (pelem.scheduled) pelem.scheduled = new Date(pelem.scheduled);
+  private async fetchAllPlaylistFromServer(version?: number) {
+    const profiles = await this.api.fetchLeadersProfiles(version);
+    const playlists: LeaderPlaylistWithVersion[] = [];
+    for (const profile of profiles) {
+      for (const playlist of profile.playlists) {
+        playlists.push({ version: profile.version, leaderId: profile.leaderId, leaderName: profile.leaderName, ...playlist });
       }
     }
-    return array;
-  }
-
-  private fetchAllPlaylistFromServer(version?: number) {
-    return new Promise<LeaderPlaylistWithVersion[]>((resolve, reject) => {
-      this.sendHttpRequest(
-        this.webRoot + "leaders" + (version ? "?version=" + version : ""),
-        (resp) => {
-          const playlists: LeaderPlaylistWithVersion[] = [];
-          for (const profile of this.parseLeaderResponse(resp)) {
-            for (const playlist of profile.playlists) {
-              playlists.push({ version: profile.version, leaderId: profile.leaderId, leaderName: profile.leaderName, ...playlist });
-            }
-          }
-          resolve(playlists);
-        },
-        reject
-      );
-    });
+    return playlists;
   }
 
   private async sharePublicLink() {
@@ -4446,7 +4306,7 @@ export class App extends AppBase {
     if (!this.currentDisplay.playlist) return true;
     try {
       const listLabel = formatLocalDateLabel(scheduled ?? new Date());
-      const res = await this.requestAppData("store_list?forced=" + (forced ? true : false), {
+      const res = await this.api.storeList(forced, {
         label: listLabel,
         scheduled: scheduled?.getTime() ?? 0,
         songs: this.currentDisplay.playlist,
@@ -4715,14 +4575,11 @@ export class App extends AppBase {
     this.restoreSessionInfo().then(startup).catch(startup);
     this.onResize();
 
-    // Opt in to backward-compatible auth v2 (access token + refresh cookie rotation).
-    setFixedHeader("X-PP-Auth-Mode", "v2");
-
     if (this.hostDevice) {
       this.hostDevice.pageLoadedSuccessfully();
       if (this.mode === "Client") {
         const name = this.hostDevice.getName() ?? this.hostDevice.getModel();
-        if (name) setFixedHeader("X_PP_DEVICE_NAME", name);
+        if (name) this.api.setFixedHeader("X-PP-Device-Name", name);
       } else if (this.mode === "App") setTimeout(() => this.hostDeviceCheck(), 2000);
       this.loadingCircleMaxLevel = 3;
     }
@@ -4732,7 +4589,7 @@ export class App extends AppBase {
     if (!this.hostDevice) return;
     try {
       const curr = this.hostDevice.retrievePreference("initPageVersion");
-      const info = (await this.requestAppData("device?data=initPage")) as DeviceDataResponse;
+      const info = await this.api.fetchDeviceData("initPage");
       if (info.error) throw info.error;
       if (curr !== info.version) {
         const resp = await fetch(info.url);
@@ -4746,14 +4603,13 @@ export class App extends AppBase {
   }
 
   public requestImage(resultCallback: ResultCallback, errorCallback: ErrorCallback, forcedImageId?: string) {
-    this.sendHttpRequest(
-      this.webRoot + "image?id=" + (forcedImageId ?? this.lastImageId),
-      (id, headers) => {
+    this.api
+      .fetchImage(forcedImageId ?? this.lastImageId)
+      .then((id) => {
         this.lastImageId = id;
-        resultCallback(id, headers);
-      },
-      errorCallback
-    );
+        resultCallback(id, {});
+      })
+      .catch((error) => errorCallback(error instanceof Error ? error : new Error(String(error))));
   }
 
   public genChordSheets(
@@ -4821,6 +4677,7 @@ export class App extends AppBase {
   }
 
   private async restoreSessionInfo() {
+    const clientId = this.clientId ?? "";
     let token = this.hostDevice?.retrievePreference("sessionId")?.trim() || "";
     if (!token) {
       const ss = window.sessionStorage;
@@ -4831,33 +4688,34 @@ export class App extends AppBase {
     if (token) {
       // Normalize storage location to the currently active host/storage backend.
       this.storeSessionInfo(token);
-      setAuthorizationHeader("Bearer " + token);
+      this.api.setToken("Bearer " + token);
     } else {
-      setAuthorizationHeader("");
+      this.api.setToken(null);
     }
     try {
-      const res = await this.requestAppData<SessionResponse>("session", { clientId: this.clientId });
+      const res = await this.api.fetchSession(clientId, { skipRefresh: true });
       if (!res) throw "Invalid response";
       if (isErrorResponse(res)) throw res.error;
       this.login = res.login;
       this.token = res.token;
       if (res.token) {
-        setAuthorizationHeader("Bearer " + res.token);
+        this.api.setToken("Bearer " + res.token);
       }
       this.verifyNotifications(res.token, false);
     } catch (error) {
-      if (!isAuthed()) this.storeSessionInfo("");
+      if (!this.api.isAuthed()) this.storeSessionInfo("");
       this.log("Token error: " + error);
       this.login = this.token = undefined;
-      setAuthorizationHeader("");
+      this.api.setToken(null);
     }
   }
 
   private async logout() {
     if (this.token) {
+      const clientId = this.clientId ?? "";
       try {
-        setAuthorizationHeader("Bearer " + this.token);
-        const res = await this.requestAppData<SessionResponse>("session", { clientId: this.clientId, logout: true });
+        this.api.setToken("Bearer " + this.token);
+        const res = await this.api.logoutSession(clientId);
         if (!res) throw "Invalid response";
         if (isErrorResponse(res)) throw res.error;
         this.login = res.login;
@@ -4867,7 +4725,7 @@ export class App extends AppBase {
         this.login = this.token = undefined;
       } finally {
         this.storeSessionInfo("");
-        setAuthorizationHeader("");
+        this.api.setToken(null);
         this.updateFieldsForUser();
         this.updateDatabase("UPDATE");
       }
@@ -4882,28 +4740,29 @@ export class App extends AppBase {
       const username = login.value;
       const password = key.value;
       if (username && password) {
-        setAuthorizationHeader("Basic " + btoa(username + ":" + password));
+        this.api.setToken("Basic " + btoa(username + ":" + password));
         let has_net = true;
         try {
           if (store?.checked) this.verifyClientId();
-          const res = (await this.requestAppData<SessionResponse>("session", { clientId: this.clientId })) as SessionResponse;
+          const clientId = this.clientId ?? "";
+          const res = (await this.api.fetchSession(clientId, { skipRefresh: true })) as SessionResponse;
           if (res && isErrorResponse(res)) throw res.error;
           this.login = res.login;
           this.token = res.token;
           this.storeSessionInfo(res.token);
-          setAuthorizationHeader("Bearer " + res.token);
+          this.api.setToken("Bearer " + res.token);
           this.verifyNotifications(res.token, true);
           this.updateDatabase("UPDATE");
         } catch (error) {
           has_net = error === 401;
-          if (!isAuthed()) this.storeSessionInfo("");
-          setAuthorizationHeader("");
+          if (!this.api.isAuthed()) this.storeSessionInfo("");
+          this.api.setToken(null);
           if (store) store.checked = false;
           this.log("Auth error: " + error);
           this.login = this.token = undefined;
         }
         if (store?.checked) await this.restoreSessionInfo(); // switch to token auth
-        const success = isAuthed();
+        const success = this.api.isAuthed();
         await this.confirm(success ? "access-granted" : has_net ? "access-denied" : "no-signal", {
           animOnly: success ? 1000 : 1500,
           parent: loginDialog,
@@ -4937,7 +4796,7 @@ export class App extends AppBase {
   private async updateSongCheckList() {
     try {
       const prev = this.songToCheck;
-      const privateList = await this.requestAppData<SongDBPendingEntry[]>("pending_songs");
+      const privateList = await this.api.fetchPendingSongs();
       this.updatePendingCheckCount(privateList.length);
       if (privateList.length > 0) {
         privateList.sort((a, b) => {
@@ -4977,7 +4836,7 @@ export class App extends AppBase {
             : accepted
               ? "APPROVE"
               : "REJECT";
-      const error = await this.requestAppData<string>(`psop?id=${this.songToCheck.songId}&version=${this.songToCheck.version}&state=${new_state}`);
+      const error = await this.api.updatePendingSongState(this.songToCheck.songId, this.songToCheck.version, new_state);
       if (error) this.alert("⚠:" + error);
       else if (!(await this.updateSongCheckList())) this.goHome();
     } catch (error) {
@@ -4986,10 +4845,10 @@ export class App extends AppBase {
   }
 
   private async updateFieldsForUser(performQuery = true) {
-    const enableEdit = (this.onlineMode || isAuthed()) && virtualKeyboard();
-    if (this.iconLogin) makeVisible(this.iconLogin, !isAuthed());
-    if (this.iconLogout) makeVisible(this.iconLogout, isAuthed());
-    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, isAuthed());
+    const enableEdit = (this.onlineMode || this.api.isAuthed()) && virtualKeyboard();
+    if (this.iconLogin) makeVisible(this.iconLogin, !this.api.isAuthed());
+    if (this.iconLogout) makeVisible(this.iconLogout, this.api.isAuthed());
+    if (this.iconStartOnlineSession) makeVisible(this.iconStartOnlineSession, this.api.isAuthed());
     if (this.iconStartSession) {
       makeVisible(this.iconStartSession, !this.ppdWatchers && (!this.iconStartOnlineSession || !isVisible(this.iconStartOnlineSession)));
       makeDisabled(this.iconStartSession, !this.udpEnabled && !this.nearbyEnabled);
@@ -4997,7 +4856,7 @@ export class App extends AppBase {
     if (this.iconStopSession) makeVisible(this.iconStopSession, this.ppdWatchers != null);
     if (this.divStartEdit) this.divStartEdit.onclick = enableEdit ? () => this.onEditSong(true) : () => this.onNoteButtonClicked(true);
     if (this.divCancelEdit) this.divCancelEdit.onclick = enableEdit ? () => this.onEditSong(false) : () => this.onNoteButtonClicked(false);
-    if (this.iconCheck) makeVisible(this.iconCheck, isAuthed() && this.mode === "App");
+    if (this.iconCheck) makeVisible(this.iconCheck, this.api.isAuthed() && this.mode === "App");
     if (performQuery) {
       if (this.divStartEdit) {
         makeVisible(this.divStartEdit, false);
@@ -5019,9 +4878,11 @@ export class App extends AppBase {
       const clientId = this.genUniqueId();
       if (this.hostDevice) {
         this.hostDevice.storePreference("clientId", this.hostDevice.getName() + ":" + clientId);
+        this.api.setClientId(this.hostDevice.getName() + ":" + clientId);
       } else {
         const ls = localStorage || window.localStorage;
         if (ls) ls.setItem("clientId", clientId);
+        this.api.setClientId(clientId);
       }
     }
   }

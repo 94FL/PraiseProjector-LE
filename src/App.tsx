@@ -1473,20 +1473,9 @@ const AppContent: React.FC = () => {
           try {
             // Build query URL matching C# format exactly
             const wd: NonNullable<typeof watchedDisplayRef.current> = watchedDisplayRef.current!;
-            let command: string = `display_query?id=${encodeURIComponent(wd.songId)}`;
-            command += `&from=${wd.from}`;
-            command += `&to=${wd.to}`;
-            command += `&transpose=${wd.transpose}`;
-            command += `&capo=${(wd.capo ?? -1) >= 0 ? wd.capo : ""}`;
-            command += `&playlist_id=${encodeURIComponent(wd.playlist_id || "")}`;
-            if (wd.section) command += `&section=${encodeURIComponent(wd.section)}`;
-            if (wd.instructions) command += `&instructions=${encodeURIComponent(wd.instructions)}`;
-            if (wd.message) command += `&message=${encodeURIComponent(wd.message)}`;
-            command += `&leader=${encodeURIComponent(leaderId)}`;
-            if (forced) command += "&forced=true";
 
             // Use cloudApi for authenticated request - response matches Display type from display.ts
-            const display: Display | null = await cloudApi.fetchDisplayQuery(command);
+            const display = (await cloudApi.fetchDisplayQuery(wd, { leaderId, forced })).display;
 
             if (abortSignal.aborted || !watchedDisplayRef.current) return;
 
