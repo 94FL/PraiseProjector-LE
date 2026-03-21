@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Leader } from "../classes/Leader";
 import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
-import { formatLocalDateKey } from "../utils/dateOnly";
+import { formatLocalDateKey } from "../../common/date-only";
 import "./ScheduleDialog.css";
 
 interface ScheduleDialogProps {

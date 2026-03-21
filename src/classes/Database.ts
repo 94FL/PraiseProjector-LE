@@ -9,7 +9,7 @@ import { DamerauLevenshtein } from "./DamerauLevenshtein";
 import { FuseSearch } from "./FuseSearch";
 import { PlaylistEntry } from "./PlaylistEntry";
 import { cloudApi } from "../services/cloudApi";
-import { formatLocalDateLabel, parseScheduleDate } from "../utils/dateOnly";
+import { formatLocalDateLabel, parseScheduleDate } from "../../common/date-only";
 import { LeaderDBProfile, SongDBEntryWithData, SongFoundType } from "../../common/pp-types";
 import { TinyEmitter } from "tiny-emitter";
 import { Settings } from "../types";

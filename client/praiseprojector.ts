@@ -80,6 +80,7 @@ import { preventDisplayFromSleep } from "./awake";
 import { getAboutBoxHtml } from "./about";
 import { DeviceMessage, PpdPacket, HostDevice, Nearby, NearbyMessageParam, HostDeviceInfoType } from "./host-device";
 import { Settings } from "../common/settings";
+import { formatLocalDateLabel } from "../common/date-only";
 import { entryIsFound, getEmptyDisplay, parseDisplay, verifyPlaylist } from "../common/pp-utils";
 
 export const praiseProjectorOrigin = "https://praiseprojector.com";
@@ -4444,7 +4445,9 @@ export class App extends AppBase {
   private async uploadList(scheduled?: Date, forced = false) {
     if (!this.currentDisplay.playlist) return true;
     try {
+      const listLabel = formatLocalDateLabel(scheduled ?? new Date());
       const res = await this.requestAppData("store_list?forced=" + (forced ? true : false), {
+        label: listLabel,
         scheduled: scheduled?.getTime() ?? 0,
         songs: this.currentDisplay.playlist,
       });

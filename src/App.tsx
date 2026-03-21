@@ -69,7 +69,7 @@ import { decode } from "../common/io-utils";
 type LeadersResponse = LeaderDBProfile[];
 type PlaylistEntryDataList = DisplayPlaylistEntry[];
 import { databaseStorage } from "./services/DatabaseStorage";
-import { formatLocalDateLabel } from "./utils/dateOnly";
+import { formatLocalDateLabel } from "../common/date-only";
 import { getEmptyDisplay } from "../common/pp-utils";
 
 type PanelType = "side" | "editor" | "preview";
