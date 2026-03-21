@@ -541,10 +541,20 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
       if (this.props.authToken) {
         cloudApi.setToken(this.props.authToken);
       }
-      const historySongs = await cloudApi.fetchSongHistory(selectedSong.Id);
+      const historyEntries = await cloudApi.fetchSongHistory(selectedSong.Id);
 
       // Match C# logic: show CompareDialog if there are history versions
-      if (historySongs && historySongs.length > 0) {
+      if (historyEntries && historyEntries.length > 0) {
+        // Reconstruct Song objects from history entries
+        const historySongs = historyEntries.map((entry) => {
+          let change = entry.uploader + "@";
+          try {
+            change += new Date(entry.created).toLocaleString();
+          } catch {
+            change += entry.created;
+          }
+          return new Song(entry.songdata.text, entry.songdata.system, change);
+        });
         // In History mode, pass all versions (including current) to the dialog
         // The dialog will handle building the version selectors
         this.setState({

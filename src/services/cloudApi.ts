@@ -1,5 +1,4 @@
 import * as t from "io-ts";
-import { Song } from "../classes/Song";
 import { decode } from "../../common/io-utils";
 import {
   Display,
@@ -23,12 +22,12 @@ import {
   songsResponseCodec,
   syncResponseCodec,
 } from "../../common/pp-codecs";
+import type { SongHistoryEntry } from "../../common/pp-types";
 
 /**
  * Cloud API service for external API calls to praiseprojector.hu
  * Uses Electron proxy in Electron mode, Vite proxy in web dev mode
  */
-import { cloudApiBaseUrl } from "../config";
 import { isRight } from "fp-ts/lib/Either";
 
 const MAX_RETRIES = 3;
@@ -55,8 +54,8 @@ class CloudApiService {
   private accessTokenExp: number = 0; // unix seconds
   private clientId: string = "";
   private refreshPromise: Promise<boolean> | null = null;
-  // Default to configured cloudApiHost (single source of truth)
-  private baseUrl: string = cloudApiBaseUrl;
+  // Base URL for API calls (set via setBaseUrl)
+  private baseUrl: string = "";
 
   setToken(token: string | null): void {
     this.authToken = token;
@@ -344,22 +343,10 @@ class CloudApiService {
   /**
    * Fetch song history from cloud
    */
-  async fetchSongHistory(songId: string): Promise<Song[]> {
+  async fetchSongHistory(songId: string): Promise<SongHistoryEntry[]> {
     const response = await this.apiCall<unknown>(`/history?songId=${songId}`);
     const entries = this.parseResponse(songHistoryResponseCodec, response);
-
-    const songs: Song[] = [];
-    for (const entry of entries) {
-      let change = entry.uploader + "@";
-      try {
-        change += new Date(entry.created).toLocaleString();
-      } catch {
-        change += entry.created;
-      }
-      const song = new Song(entry.songdata.text, entry.songdata.system, change);
-      songs.push(song);
-    }
-    return songs;
+    return entries;
   }
 
   /**

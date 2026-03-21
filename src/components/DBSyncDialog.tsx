@@ -1060,9 +1060,16 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
       }
 
       try {
-        const history = await cloudApi.fetchSongHistory(song.Id);
-        if (history.length > 0) {
-          const serverSong = history[0]; // Latest server version
+        const historyEntries = await cloudApi.fetchSongHistory(song.Id);
+        if (historyEntries.length > 0) {
+          const entry = historyEntries[0]; // Latest server version
+          let change = entry.uploader + "@";
+          try {
+            change += new Date(entry.created).toLocaleString();
+          } catch {
+            change += entry.created;
+          }
+          const serverSong = new Song(entry.songdata.text, entry.songdata.system, change);
           serverSongCacheRef.current.set(song.Id, serverSong);
           setUpdatedSongCompare({ localSong: song, otherSong: serverSong, compareType: "server" });
         } else {

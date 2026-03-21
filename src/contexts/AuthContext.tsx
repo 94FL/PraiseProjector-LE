@@ -1,6 +1,7 @@
 import React, { useState, useRef, useContext, useEffect, ReactNode, useCallback } from "react";
 import { SessionResponse } from "../../common/pp-types";
 import { cloudApi } from "../services/cloudApi";
+import { cloudApiBaseUrl } from "../config";
 import { Database } from "../classes/Database";
 
 type AuthStatus = "guest" | "authenticated" | "offline";
@@ -119,6 +120,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (host) {
           cloudApi.setBaseUrl(host);
         }
+      } else {
+        // Web mode: use the build-time / runtime resolved base URL
+        cloudApi.setBaseUrl(cloudApiBaseUrl);
       }
 
       // Set clientId early so cloudApi can use it for automatic token refresh.
