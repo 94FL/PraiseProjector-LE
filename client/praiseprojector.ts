@@ -2893,9 +2893,16 @@ export class App extends AppBase {
                 makeReadonly(sel, !!this.allSong);
                 td.appendChild(sel);
                 td.ontouchend = (e) => {
-                  // ugly hack for preventing droplist disappear
-                  e.preventDefault();
-                  e.stopPropagation();
+                  const path = e.composedPath?.() || [];
+                  const usesNativeSelect =
+                    e.target instanceof HTMLSelectElement ||
+                    e.target instanceof HTMLOptionElement ||
+                    path.some((el) => el instanceof HTMLElement && (el.tagName === "SELECT" || el.tagName === "OPTION"));
+                  if (!usesNativeSelect) {
+                    // Keep the old touch behavior for the cell itself, but never block native select opening on mobile.
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
                 };
               }
             };
