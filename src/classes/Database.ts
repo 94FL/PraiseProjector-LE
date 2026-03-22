@@ -711,6 +711,21 @@ class Database {
       console.debug("Database", `Created song backup for ${updatedSong.Id}`);
     }
 
+    // If the song has been reverted to match the original backup content, restore the
+    // server version number and discard the backup so it is no longer treated as modified.
+    if (updatedSong.version === 0) {
+      const backup = this.songBackup.get(updatedSong.Id);
+      if (backup) {
+        const u = updatedSong.ToUpdate();
+        const b = backup.song.ToUpdate();
+        if (u.songdata.text === b.songdata.text && u.songdata.system === b.songdata.system && (u.groupId ?? null) === (b.groupId ?? null)) {
+          updatedSong.version = backup.version;
+          this.songBackup.delete(updatedSong.Id);
+          console.debug("Database", `Song ${updatedSong.Id} reverted to original — restored version ${backup.version}`);
+        }
+      }
+    }
+
     this.songs.set(updatedSong.Id, updatedSong);
     this.words.remove(existing);
     this.words.add(updatedSong);
@@ -950,6 +965,18 @@ class Database {
         });
         console.debug("Database", `Created profile backup for ${leader.id}`);
       }
+
+      // If the leader profile has been reverted to match the original backup content, restore
+      // the server version number and discard the backup so it is no longer treated as modified.
+      if (leader.version === 0) {
+        const backup = this.profileBackup.get(leader.id);
+        if (backup && leader.equals(backup.leader)) {
+          leader.version = backup.version;
+          this.profileBackup.delete(leader.id);
+          console.debug("Database", `Leader ${leader.id} reverted to original — restored version ${backup.version}`);
+        }
+      }
+
       this.leaders.remove(existing);
     }
     this.leaders.add(leader);
