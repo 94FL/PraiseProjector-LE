@@ -331,7 +331,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
                   {t("MenuExportDatabase")}
                 </button>
                 <button
-                  className="dropdown-item"
+                  className="dropdown-item text-danger"
                   onClick={() => {
                     setShowSyncMenu(false);
                     onImportDatabase?.();
