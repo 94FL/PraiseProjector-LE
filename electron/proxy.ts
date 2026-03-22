@@ -186,8 +186,16 @@ function persistCookiesToDisk(): void {
       }
       data[origin] = cookies;
     }
-    fs.writeFileSync(getCookieFilePath(), JSON.stringify(data), "utf8");
-    console.info(`[Proxy Cookie] Persisted ${cookieCount} cookie(s) across ${Object.keys(data).length} origin(s) to disk`);
+    const json = JSON.stringify(data);
+    // Use async write to avoid blocking the main-process event loop
+    fs.promises
+      .writeFile(getCookieFilePath(), json, "utf8")
+      .then(() => {
+        console.info(`[Proxy Cookie] Persisted ${cookieCount} cookie(s) across ${Object.keys(data).length} origin(s) to disk`);
+      })
+      .catch((error: unknown) => {
+        console.error("[Proxy Cookie] Failed to persist cookies", error);
+      });
   } catch (error) {
     console.error("[Proxy Cookie] Failed to persist cookies", error);
   }
