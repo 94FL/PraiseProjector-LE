@@ -412,9 +412,7 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
                   value={Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}
                   onChange={(e) => updateSetting("netDisplayJpegQuality", parseInt(e.target.value, 10))}
                 />
-                <span className="small text-muted netdisplay-quality-value">
-                  {Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}%
-                </span>
+                <span className="small text-muted netdisplay-quality-value">{Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}%</span>
               </div>
               <small className="form-text text-muted">{t("NetDisplayJpegQualityHelp")}</small>
             </div>

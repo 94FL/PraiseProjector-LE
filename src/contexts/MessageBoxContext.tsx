@@ -65,12 +65,18 @@ export const MessageBoxProvider: React.FC<MessageBoxProviderProps> = ({ children
         title,
         message,
         onConfirm: () => {
-          onConfirm();
+          // Close confirm first so any later dialogs triggered by async work
+          // (e.g. save errors) are not immediately cleared by this confirm.
           onMessageBoxChange(null);
+          Promise.resolve(onConfirm()).catch((error) => {
+            console.error("MessageBox", "onConfirm callback failed", error);
+          });
         },
         onCancel: () => {
-          onCancel?.();
           onMessageBoxChange(null);
+          Promise.resolve(onCancel?.()).catch((error) => {
+            console.error("MessageBox", "onCancel callback failed", error);
+          });
         },
         showCancel: true,
         confirmText: options?.confirmText,
