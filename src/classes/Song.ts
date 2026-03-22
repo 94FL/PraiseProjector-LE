@@ -6,7 +6,7 @@ import { decode } from "../../common/io-utils";
 import * as t from "io-ts";
 import { chordSystemCodec, songDataCodec, uniType } from "../../common/pp-codecs";
 
-const songStoreCodec = uniType(
+export const songStoreCodec = uniType(
   {
     songId: t.string,
     songdata: songDataCodec,
@@ -24,6 +24,8 @@ const legacySongStoreCodec = t.type({
   _system: chordSystemCodec,
   _text: t.string,
 });
+
+export type SongStoreRecord = t.TypeOf<typeof songStoreCodec>;
 
 export type SongChange = {
   uploader: string;

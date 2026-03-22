@@ -76,6 +76,7 @@
     "diff": "^5.2.0",
     "electron-updater": "^6.7.3",
     "express": "^5.1.0",
+    "fflate": "^0.8.2",
     "font-awesome": "^4.7.0",
     "fp-ts": "^2.16.11",
     "io-ts": "^2.2.22",

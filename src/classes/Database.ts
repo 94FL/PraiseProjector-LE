@@ -1,4 +1,4 @@
-import { Song } from "./Song";
+import { Song, songStoreCodec } from "./Song";
 import { Playlist } from "./Playlist";
 import { SongPreference } from "./SongPreference";
 import { Leader } from "./Leader";
@@ -11,6 +11,9 @@ import { PlaylistEntry } from "./PlaylistEntry";
 import { cloudApi } from "../../common/cloudApi";
 import { formatLocalDateLabel, parseScheduleDate } from "../../common/date-only";
 import { LeaderDBProfile, SongDBEntryWithData, SongFoundType } from "../../common/pp-types";
+import { leaderDBProfileCodec, leadersResponseCodec, uniType } from "../../common/pp-codecs";
+import { decode, parseAndDecode } from "../../common/io-utils";
+import * as t from "io-ts";
 import { TinyEmitter } from "tiny-emitter";
 import { Settings } from "../types";
 import { databaseStorage, getStorageKey } from "../services/DatabaseStorage";
@@ -62,6 +65,22 @@ function compareSignatures(sig1: number[], sig2: number[]): number {
   }
   return match / MINHASH_NUM_HASHES;
 }
+
+const databaseSongBackupMapEntryCodec = t.tuple([
+  t.string,
+  t.type({
+    version: t.number,
+    song: songStoreCodec,
+  }),
+]);
+
+const databaseProfileBackupMapEntryCodec = t.tuple([
+  t.string,
+  t.type({
+    version: t.number,
+    leader: leaderDBProfileCodec,
+  }),
+]);
 
 export enum FoundReason {
   None,
@@ -275,6 +294,23 @@ class WordMatch {
 }
 
 class Database {
+  public static readonly importExportCodec = uniType(
+    {
+      version: t.number,
+      songs: t.array(songStoreCodec),
+      leaders: leadersResponseCodec,
+    },
+    {
+      songBackup: t.array(databaseSongBackupMapEntryCodec),
+      profileBackup: t.array(databaseProfileBackupMapEntryCodec),
+    }
+  );
+
+  private static isDevValidationEnabled(): boolean {
+    const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
+    return !!env?.DEV;
+  }
+
   private static instance: Database;
   private static currentUsername: string = "";
   private static initPromise: Promise<Database> | null = null;
@@ -282,7 +318,6 @@ class Database {
   private static switchPromise: Promise<Database> | null = null;
   public emitter = new TinyEmitter();
   private songs: Map<string, Song> = new Map();
-  public songPreferences: Map<string, SongPreference> = new Map();
   public leaders: Leaders = new Leaders();
   public words: SongWords = new SongWords();
   private typesense: TypesenseClient | null = null;
@@ -483,16 +518,24 @@ class Database {
   private async loadAsync(): Promise<void> {
     try {
       console.debug("Database", `Loading from storage key: ${this.storageKey}`);
-      const dbState = await databaseStorage.load<{
-        version?: number;
-        songs?: unknown[];
-        playlists?: unknown[];
-        songPreferences?: [string, SongPreference][];
-        leaders?: unknown;
-      }>(this.instanceUsername || undefined);
+
+      const loadCodec = uniType(
+        {
+          version: t.number,
+          songs: t.array(t.unknown),
+          leaders: t.array(t.unknown),
+        },
+        {
+          songBackup: t.array(t.tuple([t.string, t.type({ version: t.number, song: t.unknown })])),
+          profileBackup: t.array(t.tuple([t.string, t.type({ version: t.number, leader: t.unknown })])),
+        }
+      );
+
+      const dbState = await databaseStorage.load<unknown>(this.instanceUsername || undefined);
 
       if (dbState) {
-        this.applyDbState(dbState);
+        const validatedState = decode(loadCodec, dbState);
+        this.applyDbState(validatedState);
       }
     } catch (error) {
       console.error("Database", "Failed to load data from IndexedDB", error);
@@ -505,11 +548,8 @@ class Database {
   private applyDbState(dbState: {
     version?: number;
     songs?: unknown[];
-    songPreferences?: [string, SongPreference][];
     leaders?: unknown;
-    // songBackup key (new format); backup key (legacy format for backward compat)
     songBackup?: Array<[string, { version: number; song: unknown }]>;
-    backup?: Array<[string, { version: number; song: unknown }]>;
     profileBackup?: Array<[string, { version: number; leader: unknown }]>;
   }): void {
     if (dbState.songs) {
@@ -523,16 +563,12 @@ class Database {
       this.rebuildSearchEngine(songMap.values());
     }
 
-    if (dbState.songPreferences) {
-      this.songPreferences = new Map(dbState.songPreferences);
-    }
-
     if (dbState.leaders) {
       this.leaders = Leaders.fromJSON(dbState.leaders);
     }
 
-    // Load song backups: prefer new "songBackup" key, fall back to legacy "backup" key
-    const songBackupData = dbState.songBackup ?? dbState.backup;
+    // Load song backups
+    const songBackupData = dbState.songBackup;
     if (songBackupData) {
       const backupMap = new Map<string, { version: number; song: Song }>();
       for (const [songId, entry] of songBackupData) {
@@ -542,11 +578,6 @@ class Database {
         });
       }
       this.songBackup = backupMap;
-
-      // Mark dirty if we migrated from old "backup" key so it gets cleaned up on next save
-      if (dbState.backup && !dbState.songBackup) {
-        this.isDirty = true;
-      }
     }
 
     // Load profile backups
@@ -589,7 +620,7 @@ class Database {
     // Use fire-and-forget pattern for backwards compatibility
     this.forceSaveAsync().catch((error) => {
       console.error("Database", "Failed to save data to IndexedDB", error);
-      this.emitter.emit("db-save-error", error);
+      window.dispatchEvent(new CustomEvent("pp-db-save-error"));
     });
   }
 
@@ -607,17 +638,21 @@ class Database {
         const dbState = {
           version: this.version,
           songs: Array.from(this.songs.values()),
-          songPreferences: Array.from(this.songPreferences.entries()),
           leaders: this.leaders,
           songBackup: Array.from(this.songBackup.entries()),
           profileBackup: Array.from(this.profileBackup.entries()),
         };
+
+        if (Database.isDevValidationEnabled()) {
+          parseAndDecode(Database.importExportCodec, JSON.stringify(dbState));
+        }
+
         await databaseStorage.save(dbState, this.instanceUsername || undefined);
         this.isDirty = false;
         this.emitter.emit("db-updated");
       } catch (error) {
         console.error("Database", "Failed to save data to IndexedDB", error);
-        this.emitter.emit("db-save-error", error);
+        window.dispatchEvent(new CustomEvent("pp-db-save-error"));
         throw error;
       } finally {
         this.savePromise = null;
@@ -1022,7 +1057,6 @@ class Database {
     const dbState = {
       version: this.version,
       songs: Array.from(this.songs.values()),
-      songPreferences: Array.from(this.songPreferences.entries()),
       leaders: this.leaders,
     };
     return JSON.stringify(dbState);
@@ -1034,39 +1068,17 @@ class Database {
    */
   public restoreFromBackup(backupData: string): void {
     try {
-      const dbState = JSON.parse(backupData);
+      const dbState = decode(Database.importExportCodec, JSON.parse(backupData));
 
       // Clear current state
       this.songs.clear();
-      this.songPreferences.clear();
+      this.leaders = new Leaders();
       this.words = new SongWords();
+      this.songBackup.clear();
+      this.profileBackup.clear();
+      this.version = 0;
 
-      // Restore version
-      if (typeof dbState.version === "number") {
-        this.version = dbState.version;
-      }
-
-      // Restore songs
-      if (Array.isArray(dbState.songs)) {
-        for (const songData of dbState.songs) {
-          const song = Song.fromJSON(songData);
-          this.songs.set(song.Id, song);
-          this.words.add(song);
-        }
-        this.rebuildSearchEngine(this.songs.values());
-      }
-
-      // Restore song preferences
-      if (Array.isArray(dbState.songPreferences)) {
-        for (const [key, value] of dbState.songPreferences) {
-          this.songPreferences.set(key, value);
-        }
-      }
-
-      // Restore leaders
-      if (dbState.leaders) {
-        this.leaders = Leaders.fromJSON(dbState.leaders);
-      }
+      this.applyDbState(dbState);
 
       this.isDirty = true;
       console.info("Database", `Restored from backup with version ${this.version}`);
@@ -1081,20 +1093,12 @@ class Database {
    */
   public clear(): void {
     this.songs.clear();
-    this.songPreferences.clear();
     this.leaders = new Leaders();
     this.words = new SongWords();
     this.songBackup.clear();
     this.profileBackup.clear();
     this.version = 0;
     this.isDirty = true;
-  }
-
-  /**
-   * Get song preferences map
-   */
-  public getSongPreferences(): Map<string, SongPreference> {
-    return this.songPreferences;
   }
 
   public addLeader(leader: Leader): void {
@@ -1104,10 +1108,6 @@ class Database {
 
   public getSongById(id: string): Song | undefined {
     return this.songs.get(id);
-  }
-
-  public getSongPreferenceById(id: string): SongPreference | undefined {
-    return this.songPreferences.get(id);
   }
 
   public getSongs(): Song[] {

@@ -58,7 +58,6 @@ import { useLocalization } from "./localization/LocalizationContext";
 import { cloudApi } from "./../common/cloudApi";
 import { cloudApiHost } from "./config";
 import { Display, PlaylistEntry as DisplayPlaylistEntry, SongFound, SongDBEntryWithData, LeaderDBProfile } from "../common/pp-types";
-import { playlistEntryCodec, playlistEntryListCodec } from "../common/pp-codecs";
 import * as t from "io-ts";
 import { isRight } from "fp-ts/lib/Either";
 import { DisplayUpdateRequest, WindowBounds } from "./types/electron";
@@ -66,13 +65,13 @@ import { Settings } from "./types";
 import { enqueue } from "./utils/asyncQueue";
 import { Database, FormatFoundReason } from "./classes/Database";
 import type { ImportDecision } from "./components/CompareDialog";
-import { decode } from "../common/io-utils";
-type LeadersResponse = LeaderDBProfile[];
-type PlaylistEntryDataList = DisplayPlaylistEntry[];
 import { databaseStorage } from "./services/DatabaseStorage";
+import { normalizeImportedDatabase, compressDatabaseToZip } from "./services/DatabaseImportNormalizer";
 import { formatLocalDateLabel } from "../common/date-only";
 import { getEmptyDisplay } from "../common/pp-utils";
+import { decode } from "../common/io-utils";
 
+type LeadersResponse = LeaderDBProfile[];
 type PanelType = "side" | "editor" | "preview";
 
 // App state persistence codec for io-ts validation
@@ -462,17 +461,17 @@ const AppContent: React.FC = () => {
   ]);
 
   // Notify the user exactly once if the database fails to persist (storage full / IndexedDB unavailable)
+  // Uses window event instead of instance emitter because Database.switchUser() creates a new instance.
   const saveErrorNotifiedRef = useRef(false);
   useEffect(() => {
-    const db = Database.getInstance();
     const handleSaveError = () => {
       if (saveErrorNotifiedRef.current) return;
       saveErrorNotifiedRef.current = true;
       showMessage(t("StorageSaveErrorTitle"), t("StorageSaveErrorMessage"));
     };
-    db.emitter.on("db-save-error", handleSaveError);
+    window.addEventListener("pp-db-save-error", handleSaveError);
     return () => {
-      db.emitter.off("db-save-error", handleSaveError);
+      window.removeEventListener("pp-db-save-error", handleSaveError);
     };
   }, [showMessage, t]);
 
@@ -1382,6 +1381,7 @@ const AppContent: React.FC = () => {
 
   // Check if user can start sync (matching C# IsLoadedSongUnmodified and SyncDatabase)
   const handleSyncClick = useCallback(async () => {
+    saveErrorNotifiedRef.current = false;
     // Snapshot scheduled leaders before sync (matching C# prev = CollectScheduledLeaders())
     preSyncScheduledLeadersRef.current = collectScheduledLeaders();
 
@@ -1672,6 +1672,7 @@ const AppContent: React.FC = () => {
 
   // Export database to file - export from IndexedDB storage
   const handleExportDatabase = useCallback(async () => {
+    saveErrorNotifiedRef.current = false;
     try {
       // Get raw database content from IndexedDB
       const dbContent = await databaseStorage.getRaw(Database.getCurrentUsername());
@@ -1680,7 +1681,7 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      const blob = new Blob([dbContent], { type: "application/json" });
+      const blob = compressDatabaseToZip(dbContent);
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
@@ -1700,6 +1701,7 @@ const AppContent: React.FC = () => {
 
   // Import database from file - import to IndexedDB storage then reload
   const handleImportDatabase = useCallback(() => {
+    saveErrorNotifiedRef.current = false;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".ppdb,.json";
@@ -1713,19 +1715,28 @@ const AppContent: React.FC = () => {
         async () => {
           setIsImporting(true);
           try {
-            const text = await file.text();
+            // Accept current JSON exports and legacy C# XML .ppdb files
+            // (plain text or ZIP-compressed).
+            const normalizedJson = await normalizeImportedDatabase(file);
 
-            // Validate JSON
-            JSON.parse(text);
+            try {
+              // Validate import shape before replacing stored database content.
+              decode(Database.importExportCodec, JSON.parse(normalizedJson));
+            } catch (validationError) {
+              setIsImporting(false);
+              console.error("App", "Import validation failed", validationError);
+              showMessage(t("Error"), t("ImportInvalidData"));
+              return;
+            }
 
             // Import to IndexedDB storage
-            await databaseStorage.setRaw(text, Database.getCurrentUsername());
+            await databaseStorage.setRaw(normalizedJson, Database.getCurrentUsername());
 
             setIsImporting(false);
-            showMessage(t("ImportDatabaseTitle"), t("ImportSuccess"));
-
-            // Reload the page to load the new database
-            setTimeout(() => window.location.reload(), 500);
+            showMessage(t("ImportDatabaseTitle"), t("ImportSuccess"), () => {
+              // Reload the page to load the new database
+              window.location.reload();
+            });
           } catch (error) {
             setIsImporting(false);
             console.error("App", "Failed to import database", error);
@@ -1733,7 +1744,7 @@ const AppContent: React.FC = () => {
           }
         },
         undefined,
-        { confirmText: t("ImportAndMerge"), confirmDanger: true }
+        { confirmText: t("ClearAndReplace"), confirmDanger: true }
       );
     };
     input.click();
@@ -1741,12 +1752,14 @@ const AppContent: React.FC = () => {
 
   // Replace database with online data (matching C# OnReplaceDatabaseMenuItemClicked)
   const handleReplaceDatabase = useCallback(() => {
+    saveErrorNotifiedRef.current = false;
     showConfirm(
       t("Warning"),
       t("AskClearLocalDatabase"),
       async () => {
         const db = Database.getInstance();
         db.clear();
+        saveErrorNotifiedRef.current = false;
         await db.forceSaveAsync();
         setShowDBSync(true);
       },
