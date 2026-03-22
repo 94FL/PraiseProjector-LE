@@ -3210,8 +3210,8 @@ export class App extends AppBase {
             this.log("Download error: " + code);
             this.setNetworkState("offline", code);
           }
-          if (this.offlineTimeout) clearTimeout(this.offlineTimeout);
-          this.offlineTimeout = setTimeout(() => this.watchDisplay(), 60000);
+          if (this.offlineTimeout) window.clearTimeout(this.offlineTimeout);
+          this.offlineTimeout = window.setTimeout(() => this.watchDisplay(), 60000);
         },
         forced
       ));
@@ -3221,7 +3221,7 @@ export class App extends AppBase {
   private goOnline() {
     if (this.mode === "App") return;
     if (this.offlineTimeout) {
-      clearTimeout(this.offlineTimeout);
+      window.clearTimeout(this.offlineTimeout);
       this.offlineTimeout = null;
     }
     cloudApi.abortAll();
