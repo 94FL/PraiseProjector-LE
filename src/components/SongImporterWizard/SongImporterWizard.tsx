@@ -98,6 +98,7 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
 
   // Refs
   const chordProEditorRef = useRef<ChordProEditor>(null);
+  const editorSongRef = useRef<Song | null>(null);
 
   // Services
   const documentImporter = useRef(new DocumentImporter());
@@ -124,6 +125,7 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
       if (ext === ".chp") {
         const text = await file.text();
         setGeneratedChordPro(text);
+        editorSongRef.current = new Song(text);
         setCurrentTab(3); // Jump to editor
         return;
       }
@@ -225,6 +227,7 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
     if (ext === ".chp") {
       void firstFile.text().then((text) => {
         setGeneratedChordPro(text);
+        editorSongRef.current = new Song(text);
         setCurrentTab(3);
       });
       return;
@@ -399,6 +402,7 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
     const chordPro = ChordProConverter.convertToChordPro(filteredLines, chordMap);
     // Create preview song for ChordProEditor
     setGeneratedChordPro(chordPro);
+    editorSongRef.current = new Song(chordPro);
     setCurrentTab(3);
   }, [filteredLines, chordMap]);
 
@@ -691,12 +695,7 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
     <div className="wizard-tab chordpro-editor-tab">
       <h2>{t("SongImportEditChordProTitle")}</h2>
       <div className="chordpro-editor-wrapper">
-        <ChordProEditorComponent
-          ref={chordProEditorRef}
-          song={new Song(generatedChordPro)}
-          onTextChange={handleChordProChange}
-          initialEditMode={true}
-        />
+        <ChordProEditorComponent ref={chordProEditorRef} song={editorSongRef.current!} onTextChange={handleChordProChange} initialEditMode={true} />
       </div>
     </div>
   );
