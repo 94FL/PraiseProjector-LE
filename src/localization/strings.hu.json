@@ -526,6 +526,8 @@
   "SongImportParseNetworkError": "Hálózati hiba történt a fájl feldolgozása közben. Ellenőrizze az internetkapcsolatot és próbálja újra.",
   "SongImportParseEncodingError": "Kódolási probléma a fájlban. Győződjön meg róla, hogy UTF-8 kódolású, vagy mentse más formátumban.",
   "SongImportParseErrorWithDetails": "A dokumentum feldolgozása nem sikerült: {0}",
+  "SongImportDetectedChordProTitle": "ChordPro formátum érzékelve",
+  "SongImportDetectedChordProMessage": "Ez a fájl ChordPro formátumúnak tűnik. Szeretné közvetlenül a ChordPro szerkesztőben megnyitni?",
   "SongImportMissingTitleTitle": "Hiányzó cím",
   "SongImportMissingTitleMessage": "Mentés előtt adjon címet a dalnak.",
   "SongImportSaveErrorTitle": "Mentési hiba",

@@ -525,6 +525,8 @@
   "SongImportParseNetworkError": "Network error occurred while processing the file. Please check your internet connection and try again.",
   "SongImportParseEncodingError": "File encoding issue. Please ensure the file uses UTF-8 encoding or try saving it in a different format.",
   "SongImportParseErrorWithDetails": "Failed to parse document: {0}",
+  "SongImportDetectedChordProTitle": "ChordPro Format Detected",
+  "SongImportDetectedChordProMessage": "This file appears to be in ChordPro format. Would you like to open it directly in the ChordPro editor?",
   "SongImportMissingTitleTitle": "Missing Title",
   "SongImportMissingTitleMessage": "Please set a title for the song before saving.",
   "SongImportSaveErrorTitle": "Save Error",

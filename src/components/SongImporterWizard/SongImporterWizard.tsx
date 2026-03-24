@@ -4,6 +4,7 @@ import { ChordProConverter } from "../../services/ChordProConverter";
 import { ImportLines } from "../../classes/ImportLine";
 import { ChordMap, ChordNormalizer } from "../../classes/ChordMap";
 import { Song } from "../../classes/Song";
+import { ChordProDocument, getChordSystem } from "../../../chordpro/chordpro_base";
 import { Database } from "../../classes/Database";
 import ChordProEditorComponent from "../ChordProEditor/ChordProEditor";
 import { ChordProEditor } from "../ChordProEditor/ChordProEditor";
@@ -15,6 +16,17 @@ import type { ImportDecision } from "../CompareDialog";
 import "./SongImporterWizard.css";
 
 const CompareDialog = lazy(() => import("../CompareDialog"));
+
+function looksLikeChordPro(text: string): boolean {
+  const doc = new ChordProDocument(getChordSystem("G"), text);
+  for (const key of ChordProDocument.metaDataDirectives) {
+    if (doc.getMeta(key) != null) return true;
+  }
+  for (const line of doc.lines) {
+    if (line.chords.length > 0) return true;
+  }
+  return false;
+}
 
 interface SongImporterWizardProps {
   database: Database;
@@ -135,47 +147,73 @@ export const SongImporterWizard: React.FC<SongImporterWizardProps> = ({ database
 
   const parseFileAndAdvance = useCallback(
     async (file: File) => {
-      try {
-        const lines = await documentImporter.current.parseDocument(file);
-        setAllLines(lines);
+      const proceedToTab1 = async () => {
+        try {
+          const lines = await documentImporter.current.parseDocument(file);
+          setAllLines(lines);
 
-        ChordProConverter.autoDetectLineTypes(lines);
+          ChordProConverter.autoDetectLineTypes(lines);
 
-        const allIndices = new Set<number>();
-        for (let i = 0; i < lines.count; i++) {
-          allIndices.add(i);
-        }
-        setSelectedLines(allIndices);
-
-        setCurrentTab(1);
-      } catch (error) {
-        console.error("Import", "Failed to parse document", error);
-
-        let errorMessage = t("SongImportParseUnknownError");
-
-        if (error instanceof Error) {
-          const message = error.message.toLowerCase();
-
-          if (message.includes("pdf") || message.includes("worker")) {
-            errorMessage = t("SongImportParsePdfError");
-          } else if (message.includes("unsupported file format")) {
-            errorMessage = t("SongImportParseUnsupportedError");
-          } else if (message.includes("network") || message.includes("fetch")) {
-            errorMessage = t("SongImportParseNetworkError");
-          } else if (message.includes("encoding") || message.includes("charset")) {
-            errorMessage = t("SongImportParseEncodingError");
-          } else {
-            errorMessage = format("SongImportParseErrorWithDetails", error.message);
+          const allIndices = new Set<number>();
+          for (let i = 0; i < lines.count; i++) {
+            allIndices.add(i);
           }
-        }
+          setSelectedLines(allIndices);
 
-        setMessageBox({
-          title: t("SongImportErrorTitle"),
-          message: errorMessage,
-          onConfirm: () => setMessageBox(null),
-          onCancel: () => setMessageBox(null),
-        });
+          setCurrentTab(1);
+        } catch (error) {
+          console.error("Import", "Failed to parse document", error);
+
+          let errorMessage = t("SongImportParseUnknownError");
+
+          if (error instanceof Error) {
+            const message = error.message.toLowerCase();
+
+            if (message.includes("pdf") || message.includes("worker")) {
+              errorMessage = t("SongImportParsePdfError");
+            } else if (message.includes("unsupported file format")) {
+              errorMessage = t("SongImportParseUnsupportedError");
+            } else if (message.includes("network") || message.includes("fetch")) {
+              errorMessage = t("SongImportParseNetworkError");
+            } else if (message.includes("encoding") || message.includes("charset")) {
+              errorMessage = t("SongImportParseEncodingError");
+            } else {
+              errorMessage = format("SongImportParseErrorWithDetails", error.message);
+            }
+          }
+
+          setMessageBox({
+            title: t("SongImportErrorTitle"),
+            message: errorMessage,
+            onConfirm: () => setMessageBox(null),
+            onCancel: () => setMessageBox(null),
+          });
+        }
+      };
+
+      const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+      if ([".txt", ".html", ".htm"].includes(ext)) {
+        const rawText = await file.text();
+        if (looksLikeChordPro(rawText)) {
+          setMessageBox({
+            title: t("SongImportDetectedChordProTitle"),
+            message: t("SongImportDetectedChordProMessage"),
+            onConfirm: () => {
+              setMessageBox(null);
+              setGeneratedChordPro(rawText);
+              editorSongRef.current = new Song(rawText);
+              setCurrentTab(3);
+            },
+            onCancel: () => {
+              setMessageBox(null);
+              void proceedToTab1();
+            },
+          });
+          return;
+        }
       }
+
+      await proceedToTab1();
     },
     [format, t]
   );
