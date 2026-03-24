@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Settings } from "../../types";
 import { useLocalization } from "../../localization/LocalizationContext";
 import { TypesenseClient } from "../../../common/typesense-client";
+import "./SearchingSettings.css";
 
 interface SearchingSettingsProps {
   settings: Settings;
@@ -198,27 +199,51 @@ const SearchingSettings: React.FC<SearchingSettingsProps> = ({ settings, updateS
                 {platform === "windows" ? (
                   <div>
                     <p className="mb-1">{t("TypesenseSetupWindows")}</p>
-                    <code className="d-block bg-dark text-light p-2 rounded small mb-2">
-                      docker run --rm -p 8108:8108 -v typesense-data:/data typesense/typesense:27.1 --data-dir /data --api-key=
-                      {settings.typesenseApiKey || "your_api_key"}
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {`docker run --rm -p 8108:8108 -v typesense-data:/data typesense/typesense:27.1 --data-dir /data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
+                    </code>
+                    <p className="mb-1 mt-2">{t("TypesenseSetupWindowsService")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {`docker run -d --name typesense --restart always -p 8108:8108 -v typesense-data:/data typesense/typesense:27.1 --data-dir /data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
                     </code>
                   </div>
                 ) : platform === "macos" ? (
                   <div>
                     <p className="mb-1">{t("TypesenseSetupMac")}</p>
-                    <code className="d-block bg-dark text-light p-2 rounded small mb-2">
-                      brew install typesense/tap/typesense-server
-                      <br />
-                      typesense-server --data-dir=/tmp/typesense-data --api-key={settings.typesenseApiKey || "your_api_key"}
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {"brew install typesense/tap/typesense-server\n"}
+                      {`typesense-server --data-dir=/tmp/typesense-data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
+                    </code>
+                    <p className="mb-1 mt-2">{t("TypesenseSetupMacService")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {"brew services start typesense/tap/typesense-server"}
                     </code>
                   </div>
                 ) : (
                   <div>
                     <p className="mb-1">{t("TypesenseSetupLinux")}</p>
-                    <code className="d-block bg-dark text-light p-2 rounded small mb-2" style={{ whiteSpace: "pre-line" }}>
+                    <p className="mb-1 mt-2 small fw-semibold">{t("TypesenseSetupLinuxDeb")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
                       {"curl -O https://dl.typesense.org/releases/27.1/typesense-server-27.1-amd64.deb\n"}
                       {"sudo apt install ./typesense-server-27.1-amd64.deb\n"}
                       {`typesense-server --data-dir=/tmp/typesense-data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
+                    </code>
+                    <p className="mb-1 mt-2 small fw-semibold">{t("TypesenseSetupLinuxRpm")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {"curl -O https://dl.typesense.org/releases/27.1/typesense-server-27.1-1.x86_64.rpm\n"}
+                      {"sudo yum install ./typesense-server-27.1-1.x86_64.rpm\n"}
+                      {`typesense-server --data-dir=/tmp/typesense-data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
+                    </code>
+                    <p className="mb-1 mt-2 small fw-semibold">{t("TypesenseSetupLinuxTar")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {"curl -O https://dl.typesense.org/releases/27.1/typesense-server-27.1-linux-amd64.tar.gz\n"}
+                      {"tar xzf typesense-server-27.1-linux-amd64.tar.gz\n"}
+                      {`./typesense-server --data-dir=/tmp/typesense-data --api-key=${settings.typesenseApiKey || "your_api_key"}`}
+                    </code>
+                    <p className="mb-1 mt-2 small fw-semibold">{t("TypesenseSetupLinuxService")}</p>
+                    <code className="d-block bg-dark text-light p-2 rounded small mb-2 ts-code-block">
+                      {"sudo systemctl enable typesense-server\n"}
+                      {"sudo systemctl start typesense-server"}
                     </code>
                   </div>
                 )}
