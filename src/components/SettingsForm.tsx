@@ -25,6 +25,14 @@ interface SettingsFormProps {
   onOpenLogs?: () => void;
 }
 
+function normalizeSettingsTab(tab: string | undefined): string {
+  const validTabs = new Set(["general", "searching", "images", "leaders", "sections", "about", ...(window.electronAPI ? ["webserver"] : [])]);
+  if (tab && validTabs.has(tab)) {
+    return tab;
+  }
+  return "general";
+}
+
 const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initialLeaderId, onOpenLogs }) => {
   const { settings, initialSettings, updateSetting, saveSettings, revertSettings } = useSettings();
   const { leaders, setLeaders, saveLeaders, revertLeaders } = useDatabase();
@@ -33,7 +41,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
   const { isGuest } = useAuth();
   const { hasUpdate } = useUpdate();
   const { showMessage } = useMessageBox();
-  const [activeTab, setActiveTab] = useState(initialTab || "general");
+  const [activeTab, setActiveTab] = useState(() => normalizeSettingsTab(initialTab));
   const [selectedLeaderId, setSelectedLeaderId] = useState<string | null>(initialLeaderId ?? null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -67,9 +75,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
   }, [leaders, selectedLeaderId]);
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
+    setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
 
   useEffect(() => {
