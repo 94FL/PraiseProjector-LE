@@ -698,8 +698,8 @@ export class ChordProEditor {
     if (chp) {
       if (referenceChp) {
         const substitutor = new DiffTextPreProcessor();
-        const old = substitutor.subst(new ChordProDocument(this.system, referenceChp).generateDocument());
-        const act = substitutor.subst(new ChordProDocument(this.system, chp).generateDocument());
+        const old = new ChordProDocument(this.system, referenceChp).generateDocument();
+        const act = new ChordProDocument(this.system, chp).generateDocument();
         const diff = DifferentialText.create(old, act, { preprocessor: substitutor });
         const lines: DifferentialText[] = [];
         let line = new DifferentialText();

@@ -213,6 +213,11 @@ export class ChordProProperties {
   private current = new Map<string, string>();
   private old = new Map<string, string>();
   private diffCache = new Map<string, DifferentialText>();
+
+  private normalizeValue(value: string) {
+    return value.replace(/\r/g, "").trim();
+  }
+
   get empty() {
     return this.current.size + this.old.size === 0;
   }
@@ -240,7 +245,7 @@ export class ChordProProperties {
   differential(key: string) {
     let value = this.diffCache.get(key);
     if (value === undefined) {
-      value = DifferentialText.create(this.old.get(key) ?? "", this.current.get(key) ?? "");
+      value = DifferentialText.create(this.normalizeValue(this.old.get(key) ?? ""), this.normalizeValue(this.current.get(key) ?? ""));
       this.diffCache.set(key, value);
     }
     return value;

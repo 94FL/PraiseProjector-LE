@@ -107,17 +107,39 @@ export function createDivElement(options?: {
 
 export class DiffTextPreProcessor {
   private static readonly placeholder = String.fromCodePoint(0xe000);
+  private static readonly tokenPattern = /\[.*?\]|^[ \t]*{[^\r\n{}]+}[ \t]*$/gm;
   private codepoint = 0xe001;
   private readonly map = new Map<string, string>();
   private readonly table: string[] = [];
+
+  private static normalizeChordToken(token: string) {
+    const inner = token.substring(1, token.length - 1).trim().replace(/[ \t]+/g, " ");
+    return `[${inner}]`;
+  }
+
+  private static normalizeDirectiveToken(token: string) {
+    const trimmed = token.trim();
+    const match = /^\{\s*([^\s:}]+)\s*(?::\s*(.*?))?\s*\}$/.exec(trimmed);
+    if (!match) return trimmed;
+    const name = match[1];
+    const value = match[2]?.trim();
+    return value ? `{${name}:${value}}` : `{${name}}`;
+  }
+
+  private static normalizeToken(token: string) {
+    if (token.startsWith("[")) return this.normalizeChordToken(token);
+    return this.normalizeDirectiveToken(token);
+  }
+
   subst(str: string) {
     return str
-      .replace(/\[.*?\]|^[ \t]*{.+:.*}[ \t]*$/gm, (s) => {
-        const code = this.map.get(s);
+      .replace(DiffTextPreProcessor.tokenPattern, (s) => {
+        const normalized = DiffTextPreProcessor.normalizeToken(s);
+        const code = this.map.get(normalized);
         if (code) return code;
-        this.table.push(s);
+        this.table.push(normalized);
         const r = String.fromCodePoint(this.codepoint++);
-        this.map.set(s, r);
+        this.map.set(normalized, r);
         return r;
       })
       .replace(/[\ue001-\uf8ff]/g, (s) => s + DiffTextPreProcessor.placeholder);
@@ -128,6 +150,55 @@ export class DiffTextPreProcessor {
 }
 
 export type DifferentialTextChunk = { text: string; added?: boolean };
+
+/**
+ * Post-process diff chunks from a word-level (or char-level) pass by grouping
+ * consecutive changed (added/removed) chunks and running a char-level re-diff
+ * on each group.
+ *
+ * This fixes the case where word-level diff marks an entire "[chord]word" token
+ * as changed even though only the chord part changed.  The char-level re-diff
+ * over the substituted text then emits separate removed/added chunks for the
+ * chord token and an unchanged chunk for the lyrics characters – so the parser
+ * sees only the chord as changed, not the lyrics.
+ *
+ * As a special case, if the accumulated added and removed text are identical
+ * the group is collapsed to a single unchanged chunk.
+ */
+function refineDiffChunks(chunks: DifferentialTextChunk[]): DifferentialTextChunk[] {
+  const result: DifferentialTextChunk[] = [];
+  let i = 0;
+  while (i < chunks.length) {
+    if (chunks[i].added === undefined) {
+      result.push(chunks[i]);
+      i++;
+      continue;
+    }
+    // Collect ALL consecutive changed chunks regardless of their direction.
+    let addedText = "";
+    let removedText = "";
+    while (i < chunks.length && chunks[i].added !== undefined) {
+      if (chunks[i].added === true) addedText += chunks[i].text;
+      else removedText += chunks[i].text;
+      i++;
+    }
+    if (!addedText) {
+      result.push({ text: removedText, added: false });
+    } else if (!removedText) {
+      result.push({ text: addedText, added: true });
+    } else if (addedText === removedText) {
+      // Perfect symmetric cancel → emit as unchanged
+      result.push({ text: addedText, added: undefined });
+    } else {
+      // Char-level re-diff of the two groups for finer granularity.
+      // Works on the substituted form so chord tokens (single private-use
+      // chars) are never split across chunk boundaries.
+      for (const change of diffChars(removedText, addedText))
+        result.push({ text: change.value, added: change.added ? true : change.removed ? false : undefined });
+    }
+  }
+  return result;
+}
 
 export class DifferentialText {
   private readonly chunks: DifferentialTextChunk[] = [];
@@ -145,12 +216,19 @@ export class DifferentialText {
     const substitutor = options?.preprocessor;
     const old = substitutor ? substitutor.subst(prev) : prev;
     const act = substitutor ? substitutor.subst(actual) : actual;
-    const diff: DifferentialTextChunk[] = [];
+    // Build raw chunks in substituted form so refineDiffChunks can operate on
+    // atomic chord tokens (single private-use chars) before restoration.
+    let rawChunks: DifferentialTextChunk[] = [];
     for (const change of wordLevel ? diffWords(old, act) : diffChars(old, act))
-      diff.push({
-        text: substitutor ? substitutor.restore(change.value) : change.value,
-        added: change.added ? true : change.removed ? false : undefined,
-      });
+      rawChunks.push({ text: change.value, added: change.added ? true : change.removed ? false : undefined });
+    // Re-group and char-level re-diff adjacent changed groups.  Only applied
+    // when a substitutor is active (ChordPro context) so that non-ChordPro
+    // call-sites (metadata diffs, etc.) are unaffected.
+    if (substitutor) rawChunks = refineDiffChunks(rawChunks);
+    // Restore tokens and drop empty chunks produced by placeholder stripping.
+    const diff = rawChunks
+      .map((c) => ({ text: substitutor ? substitutor.restore(c.text) : c.text, added: c.added }))
+      .filter((c) => c.text.length > 0);
     return new DifferentialText(diff);
   }
 
