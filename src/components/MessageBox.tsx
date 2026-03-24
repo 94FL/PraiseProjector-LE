@@ -37,7 +37,7 @@ const MessageBox: React.FC<MessageBoxProps> = ({
   const displayCancelText = cancelText || t("Cancel");
 
   return (
-    <div className="messagebox-overlay" onClick={onCancel ? onCancel : undefined}>
+    <div className="messagebox-overlay">
       <div className="messagebox-container" onClick={(e) => e.stopPropagation()}>
         <div className="messagebox-header">
           <h5 className="messagebox-title">{displayTitle}</h5>
