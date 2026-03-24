@@ -52,14 +52,10 @@ Do not edit it manually.
   - Project: https://github.com/microsoft/TypeScript
   - License: Apache License 2.0
   - License URL: https://github.com/microsoft/TypeScript/blob/main/LICENSE.txt
-- browserify
-  - Project: https://github.com/browserify/browserify
+- esbuild
+  - Project: https://github.com/evanw/esbuild
   - License: MIT License
-  - License URL: https://github.com/browserify/browserify/blob/master/LICENSE
-- uglify-js
-  - Project: https://github.com/mishoo/UglifyJS
-  - License: UglifyJS License
-  - License URL: https://github.com/mishoo/UglifyJS/blob/master/LICENSE
+  - License URL: https://github.com/evanw/esbuild/blob/main/LICENSE.md
 
 ## Electron frontend/web app (public/src)
 
@@ -99,10 +95,10 @@ Do not edit it manually.
   - Project: https://github.com/mwilliamson/mammoth.js
   - License: BSD-2-Clause
   - License URL: https://github.com/mwilliamson/mammoth.js/blob/master/LICENSE
-- Fuse.js
-  - Project: https://github.com/krisk/Fuse
-  - License: Apache License 2.0
-  - License URL: https://github.com/krisk/Fuse/blob/master/LICENSE
+- Typesense-JS
+  - Project: https://github.com/typesense/typesense-js
+  - License: Apache-2.0 license
+  - License URL: https://github.com/typesense/typesense-js?tab=Apache-2.0-1-ov-file#readme
 - Font Awesome
   - Project: https://github.com/FortAwesome/Font-Awesome
   - License: SIL OFL 1.1 (fonts), MIT License (CSS)
