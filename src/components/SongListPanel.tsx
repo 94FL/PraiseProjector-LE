@@ -1062,6 +1062,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
           </div>
           <div className="songlist-context-menu-divider"></div>
           <div className="songlist-context-menu-item songlist-context-menu-submenu">
+            <i className="fa fa-sort me-2"></i>
             <span>{t?.("SongListOrdering") || "Ordering"}</span>
             <i className="fa fa-chevron-right ms-auto"></i>
             <div className="songlist-context-submenu">
@@ -1073,6 +1074,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
                 }}
               >
                 <i className={`fa fa-${orderMode === "alphabetical" ? "check-" : ""}square-o me-2`}></i>
+                <i className="fa fa-sort-alpha-asc me-2"></i>
                 {t?.("SongListOrderAlphabetical") || "Alphabetical"}
               </div>
               <div
@@ -1083,6 +1085,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
                 }}
               >
                 <i className={`fa fa-${orderMode === "recent" ? "check-" : ""}square-o me-2`}></i>
+                <i className="fa fa-clock-o me-2"></i>
                 {t?.("SongListOrderMoreRecent") || "More recent"}
               </div>
               <div
@@ -1093,6 +1096,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
                 }}
               >
                 <i className={`fa fa-${orderMode === "cost" ? "check-" : ""}square-o me-2`}></i>
+                <i className="fa fa-star-o me-2"></i>
                 {t?.("SongListOrderMatchingValue") || "Matching value"}
               </div>
             </div>
@@ -1103,6 +1107,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
               className={`songlist-context-menu-item ${!this.state.selectedSong || this.state.isLoadingHistory ? "disabled" : ""}`}
               onClick={this.state.selectedSong && !this.state.isLoadingHistory ? this.handleShowHistory : undefined}
             >
+              <i className="fa fa-history me-2"></i>
               {this.state.isLoadingHistory ? this.props.t?.("LoadingEllipsis") : this.props.t?.("History")}
             </div>
           )}
