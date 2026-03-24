@@ -35,7 +35,7 @@ interface PreviewPanelProps {
   // Splitter between section list and preview display
   previewSplitSize?: number;
   onPreviewSplitSizeChange?: (size: number) => void;
-  onSettingsClick?: () => void;
+  onSettingsClick?: (initialTab?: string) => void;
 }
 
 // Define ref methods that can be called from parent
@@ -1327,6 +1327,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
             <div className="tab-pane-content">
               <ImageSelector
                 selectedImageId={selectedImageId}
+                onOpenImageSettings={() => onSettingsClick?.("images")}
                 onSelectImage={(imageId, dataUrl) => {
                   setSelectedImageId(imageId);
                   if (dataUrl) {
@@ -1648,7 +1649,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
               <div className="d-flex flex-column ml-2 flex-shrink-0 preview-button-column">
                 <div className="btn-group-vertical">
                   {onSettingsClick && (
-                    <button className="btn btn-light" aria-label="Settings" title={tt("toolbar_settings")} onClick={onSettingsClick}>
+                    <button className="btn btn-light" aria-label="Settings" title={tt("toolbar_settings")} onClick={() => onSettingsClick()}>
                       <Icon type={IconType.SETTINGS} />
                     </button>
                   )}

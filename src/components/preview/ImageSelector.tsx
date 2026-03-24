@@ -14,6 +14,7 @@ interface ExternalImage {
 interface ImageSelectorProps {
   selectedImageId: string | null;
   onSelectImage: (imageId: string | null, dataUrl: string | null) => void;
+  onOpenImageSettings?: () => void;
 }
 
 // Debounce delay before loading images (ms) - prevents loading images that are quickly scrolled past
@@ -120,7 +121,7 @@ const LazyExternalImage: React.FC<{
   );
 };
 
-const ImageSelector: React.FC<ImageSelectorProps> = ({ selectedImageId, onSelectImage }) => {
+const ImageSelector: React.FC<ImageSelectorProps> = ({ selectedImageId, onSelectImage, onOpenImageSettings }) => {
   const { settings } = useSettings();
   const { t } = useLocalization();
   const [internalImages, setInternalImages] = useState<StoredImage[]>([]);
@@ -267,11 +268,22 @@ const ImageSelector: React.FC<ImageSelectorProps> = ({ selectedImageId, onSelect
   return (
     <>
       <div className="image-selector">
-        {/* Expand button */}
         {hasImages && (
-          <button className="image-selector-expand-btn" onClick={() => setIsExpanded(true)} title={tt("imagelist_expand")}>
-            <i className="fa fa-expand"></i>
-          </button>
+          <div className="image-selector-btn-row">
+            {onOpenImageSettings && (
+              <button
+                className="image-selector-settings-btn"
+                onClick={onOpenImageSettings}
+                title={tt("toolbar_settings")}
+                aria-label={tt("toolbar_settings")}
+              >
+                <i className="fa fa-gear"></i>
+              </button>
+            )}
+            <button className="image-selector-expand-btn" onClick={() => setIsExpanded(true)} title={tt("imagelist_expand")}>
+              <i className="fa fa-expand"></i>
+            </button>
+          </div>
         )}
 
         {isLoading && (
@@ -284,9 +296,24 @@ const ImageSelector: React.FC<ImageSelectorProps> = ({ selectedImageId, onSelect
 
         {!isLoading && !hasImages && (
           <div className="empty-images-message text-muted text-center py-3">
-            <i className="fa fa-image fa-2x mb-2 d-block opacity-50"></i>
+            <button
+              className="empty-images-action empty-images-action-icon"
+              onClick={onOpenImageSettings}
+              disabled={!onOpenImageSettings}
+              title={t("ImportImagesInSettings") || "Import images in Settings → Images"}
+              aria-label={t("ImportImagesInSettings") || "Import images in Settings → Images"}
+            >
+              <i className="fa fa-image fa-2x d-block opacity-50"></i>
+            </button>
             <p className="mb-1">{t("NoImagesAvailable") || "No images available"}</p>
-            <p className="small">{t("ImportImagesInSettings") || "Import images in Settings → Images"}</p>
+            <button
+              className="empty-images-action empty-images-action-text small"
+              onClick={onOpenImageSettings}
+              disabled={!onOpenImageSettings}
+              title={t("ImportImagesInSettings") || "Import images in Settings → Images"}
+            >
+              {t("ImportImagesInSettings") || "Import images in Settings → Images"}
+            </button>
           </div>
         )}
 
@@ -299,7 +326,22 @@ const ImageSelector: React.FC<ImageSelectorProps> = ({ selectedImageId, onSelect
           <div className="image-selector-popup" onClick={(e) => e.stopPropagation()}>
             <div className="image-selector-popup-header">
               <h6 className="m-0">{t("SelectBackgroundImage") || "Select Background Image"}</h6>
-              <button className="btn-close" onClick={() => setIsExpanded(false)} aria-label="Close"></button>
+              <div className="d-flex align-items-center gap-2">
+                {onOpenImageSettings && (
+                  <button
+                    className="image-selector-settings-btn"
+                    onClick={() => {
+                      setIsExpanded(false);
+                      onOpenImageSettings();
+                    }}
+                    title={tt("toolbar_settings")}
+                    aria-label={tt("toolbar_settings")}
+                  >
+                    <i className="fa fa-gear"></i>
+                  </button>
+                )}
+                <button className="btn-close" onClick={() => setIsExpanded(false)} aria-label="Close"></button>
+              </div>
             </div>
             <div className="image-selector-popup-body">{renderImageGrid(true)}</div>
           </div>

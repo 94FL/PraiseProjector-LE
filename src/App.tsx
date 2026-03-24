@@ -304,8 +304,8 @@ const AppContent: React.FC = () => {
   const [currentSongText, updateCurrentSongText] = useState<string>("");
   const { showConfirm, showConfirmAsync, showYesNoCancelAsync, showMessage } = useMessageBox();
 
-  const openSettings = useCallback(() => {
-    setSettingsInitialTab(null);
+  const openSettings = useCallback((initialTab?: string | null) => {
+    setSettingsInitialTab(initialTab ?? null);
     setSettingsInitialLeaderId(null);
     setShowSettings(true);
   }, []);
@@ -2048,6 +2048,7 @@ const AppContent: React.FC = () => {
                   onSectionsReady={handleSectionsReady}
                   previewSplitSize={previewSplitSize}
                   onPreviewSplitSizeChange={setPreviewSplitSize}
+                  onSettingsClick={openSettings}
                 />
               )}
             </Panel>
