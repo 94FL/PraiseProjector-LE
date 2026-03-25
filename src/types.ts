@@ -12,7 +12,11 @@ export interface Settings {
   displayFontBold: boolean;
   displayFontItalic: boolean;
   displayFontUnderline: boolean;
+  displayTextShadowEnabled: boolean;
   displayTextShadowOffset: number;
+  displayTextShadowBlur: number;
+  displayTextShadowColor: string;
+  displayTextShadowOpacity: number;
   backgroundColor: string;
   textColor: string;
   textBorderColor: string;
@@ -30,6 +34,7 @@ export interface Settings {
   keepAwake: boolean;
   showTooltips: boolean;
   pictureFolder: string;
+  selectedBackgroundImageId: string | null;
   backgroundImageFit: "touchInner" | "touchOuter" | "stretch";
   // Search settings
   useTextSimilarities: boolean;

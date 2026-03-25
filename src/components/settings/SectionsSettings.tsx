@@ -10,6 +10,21 @@ interface SectionsSettingsProps {
 const SectionsSettings: React.FC<SectionsSettingsProps> = ({ settings, updateSetting }) => {
   const { t } = useLocalization();
 
+  const handleSectionSelectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    updateSetting("sectionSelByEditorLineSel", value === "Click" || value === "Both");
+    updateSetting("sectionSelByEditorDblclk", value === "Double Click" || value === "Both");
+  };
+
+  const getSectionSelectionValue = () => {
+    const line = settings.sectionSelByEditorLineSel;
+    const dbl = settings.sectionSelByEditorDblclk;
+    if (line && dbl) return "Both";
+    if (line) return "Click";
+    if (dbl) return "Double Click";
+    return "None";
+  };
+
   useEffect(() => {
     if (settings.realSectionPreview) {
       updateSetting("previewFontInSections", true);
@@ -18,6 +33,16 @@ const SectionsSettings: React.FC<SectionsSettingsProps> = ({ settings, updateSet
 
   return (
     <div className="container-fluid">
+      <div className="form-group mb-3">
+        <label htmlFor="sectionSelectionMode">{t("SettingsSectionSelectionInEditor")}</label>
+        <select className="form-control" id="sectionSelectionMode" value={getSectionSelectionValue()} onChange={handleSectionSelectionChange}>
+          <option value="None">{t("SettingsSectionSelNone")}</option>
+          <option value="Click">{t("SettingsSectionSelClick")}</option>
+          <option value="Double Click">{t("SettingsSectionSelDoubleClick")}</option>
+          <option value="Both">{t("SettingsSectionSelBoth")}</option>
+        </select>
+      </div>
+
       <div className="form-check">
         <input
           className="form-check-input"

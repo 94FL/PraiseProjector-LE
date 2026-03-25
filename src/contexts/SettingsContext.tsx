@@ -53,7 +53,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       displayFontBold: false,
       displayFontItalic: false,
       displayFontUnderline: false,
+      displayTextShadowEnabled: true,
       displayTextShadowOffset: 2,
+      displayTextShadowBlur: 4,
+      displayTextShadowColor: "#000000",
+      displayTextShadowOpacity: 0.8,
       backgroundColor: "#000000", // Black
       textColor: "#ffffff", // White
       textBorderColor: "#000000", // Empty in C# = black
@@ -63,7 +67,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       useNonSplittingWords: true, // C# default: True
       realSectionPreview: false,
       previewFontInSections: false,
-      nonSplittingWordList: ["Isten", "Jézus", "Krisztus", "Úr", "Ur"], // C# defaults
+      nonSplittingWordList: ["Isten", "Jézus", "Krisztus", "Úr", "Ur", "Fiú", "Bárány"], // C# defaults
       hideChordsInReadonlyEditor: false,
       sectionHighlightInEditor: false,
       sectionSelByEditorLineSel: false,
@@ -71,6 +75,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       keepAwake: false,
       showTooltips: true,
       pictureFolder: "",
+      selectedBackgroundImageId: null,
       backgroundImageFit: "touchInner",
       baseFontSize: 16, // Base font size for UI scaling
       autoAdjustFontSize: true, // Auto-adjust based on screen size

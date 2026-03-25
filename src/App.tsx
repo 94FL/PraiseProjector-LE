@@ -90,6 +90,7 @@ const AppStateCodec = t.type({
   playlistPanelSize: t.union([t.number, t.undefined]),
   songListPanelSize: t.union([t.number, t.undefined]),
   previewSplitSize: t.union([t.number, t.undefined]),
+  previewTab: t.union([t.literal("format"), t.literal("image"), t.literal("message"), t.undefined]),
   // Window bounds for electron
   windowBounds: t.union([
     t.type({
@@ -358,6 +359,7 @@ const AppContent: React.FC = () => {
   const [playlistPanelSize, setPlaylistPanelSize] = useState<number>(initialAppState?.playlistPanelSize ?? 60);
   const [songListPanelSize, setSongListPanelSize] = useState<number>(initialAppState?.songListPanelSize ?? 40);
   const [previewSplitSize, setPreviewSplitSize] = useState<number>(initialAppState?.previewSplitSize ?? 60);
+  const [previewTab, setPreviewTab] = useState<"format" | "image" | "message">(initialAppState?.previewTab ?? "format");
   const lastScheduledDisplayRef = useRef<Display>(getEmptyDisplay());
 
   // Song filter state for persistence
@@ -403,6 +405,7 @@ const AppContent: React.FC = () => {
       playlistPanelSize: playlistPanelSize,
       songListPanelSize: songListPanelSize,
       previewSplitSize: previewSplitSize,
+      previewTab: previewTab,
       windowBounds: undefined, // Will be set on beforeunload
     };
     saveAppState(state);
@@ -418,6 +421,7 @@ const AppContent: React.FC = () => {
     playlistPanelSize,
     songListPanelSize,
     previewSplitSize,
+    previewTab,
   ]);
 
   // Save app state before window closes (to capture final section selection and window bounds)
@@ -442,6 +446,7 @@ const AppContent: React.FC = () => {
         playlistPanelSize: playlistPanelSize,
         songListPanelSize: songListPanelSize,
         previewSplitSize: previewSplitSize,
+        previewTab: previewTab,
         windowBounds,
       };
       saveAppState(state);
@@ -459,6 +464,7 @@ const AppContent: React.FC = () => {
     playlistPanelSize,
     songListPanelSize,
     previewSplitSize,
+    previewTab,
   ]);
 
   // Notify the user exactly once if the database fails to persist (storage full / IndexedDB unavailable)
@@ -1962,6 +1968,8 @@ const AppContent: React.FC = () => {
                     previewSplitSize={previewSplitSize}
                     onPreviewSplitSizeChange={setPreviewSplitSize}
                     onSettingsClick={openSettings}
+                    initialTab={previewTab}
+                    onActiveTabChange={setPreviewTab}
                   />
                 )}
               </div>
@@ -2060,6 +2068,8 @@ const AppContent: React.FC = () => {
                   previewSplitSize={previewSplitSize}
                   onPreviewSplitSizeChange={setPreviewSplitSize}
                   onSettingsClick={openSettings}
+                  initialTab={previewTab}
+                  onActiveTabChange={setPreviewTab}
                 />
               )}
             </Panel>

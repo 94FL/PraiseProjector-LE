@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import GeneralSettings from "./settings/GeneralSettings";
+import ProjectingSettings from "./settings/ProjectingSettings";
 import SearchingSettings from "./settings/SearchingSettings";
 import LeadersSettings from "./settings/LeadersSettings";
 import SectionsSettings from "./settings/SectionsSettings";
@@ -26,7 +27,16 @@ interface SettingsFormProps {
 }
 
 function normalizeSettingsTab(tab: string | undefined): string {
-  const validTabs = new Set(["general", "searching", "images", "leaders", "sections", "about", ...(window.electronAPI ? ["webserver"] : [])]);
+  const validTabs = new Set([
+    "general",
+    "searching",
+    "projecting",
+    "images",
+    "leaders",
+    "sections",
+    "about",
+    ...(window.electronAPI ? ["webserver"] : []),
+  ]);
   if (tab && validTabs.has(tab)) {
     return tab;
   }
@@ -48,6 +58,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   // Detect mobile viewport
   useEffect(() => {
@@ -224,6 +235,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
     const tabs = {
       general: <GeneralSettings settings={settings} updateSetting={updateSetting} />,
       searching: <SearchingSettings settings={settings} updateSetting={updateSetting} />,
+      projecting: <ProjectingSettings settings={settings} updateSetting={updateSetting} />,
       leaders: (
         <LeadersSettings
           settings={settings}
@@ -255,10 +267,21 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
 
   return (
     <div className="settings-modal-backdrop">
-      <div ref={dialogRef} className="settings-modal-dialog" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} className={`settings-modal-dialog${isMaximized ? " maximized" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="settings-modal-header" onMouseDown={handleMouseDown}>
           <h5 className="settings-modal-title">{t("Settings")}</h5>
-          <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
+          <div className="settings-header-buttons">
+            <button
+              type="button"
+              className={`btn-header-maximize${isMaximized ? " active" : ""}`}
+              onClick={() => setIsMaximized(!isMaximized)}
+              aria-label={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? "Restore" : "Maximize"}
+            >
+              <i className={`fa ${isMaximized ? "fa-window-restore" : "fa-window-maximize"}`}></i>
+            </button>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
+          </div>
         </div>
         <div className="settings-modal-body">
           <ul className="nav nav-tabs">
@@ -270,6 +293,11 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
             <li className="nav-item">
               <a className={`nav-link ${activeTab === "searching" ? "active" : ""}`} href="#" onClick={() => setActiveTab("searching")}>
                 {t("SettingsPageSearching")}
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className={`nav-link ${activeTab === "projecting" ? "active" : ""}`} href="#" onClick={() => setActiveTab("projecting")}>
+                {t("SettingsPageProjecting")}
               </a>
             </li>
             <li className="nav-item">

@@ -19,6 +19,9 @@ import { useLeader } from "../contexts/LeaderContext";
 import { useSessionUrl } from "../hooks/useSessionUrl";
 import { Panel, PanelGroup } from "react-resizable-panels";
 import ResizeHandle from "./ResizeHandle";
+import { imageStorageService } from "../services/ImageStorage";
+
+type PreviewTab = "format" | "image" | "message";
 
 interface PreviewPanelProps {
   selectedPlaylistItem: PlaylistEntry | null;
@@ -36,6 +39,8 @@ interface PreviewPanelProps {
   previewSplitSize?: number;
   onPreviewSplitSizeChange?: (size: number) => void;
   onSettingsClick?: (initialTab?: string) => void;
+  initialTab?: PreviewTab;
+  onActiveTabChange?: (tab: PreviewTab) => void;
 }
 
 // Define ref methods that can be called from parent
@@ -72,6 +77,8 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       previewSplitSize,
       onPreviewSplitSizeChange,
       onSettingsClick,
+      initialTab = "format",
+      onActiveTabChange,
     },
     ref
   ) => {
@@ -81,7 +88,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const { t } = useLocalization();
     const { tt } = useTooltips();
     const { isAuthenticated } = useAuth();
-    const [activeTab, setActiveTab] = useState("format");
+    const [activeTab, setActiveTab] = useState<PreviewTab>(initialTab);
     const [sections, setSections] = useState<ExtendedSectionItem[]>([]);
     const [nextSectionIndex, setNextSectionIndex] = useState(-1);
     const { guestLeaderId: _guestLeaderId } = useLeader(); // kept for potential future use
@@ -107,6 +114,18 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const [showText, setShowText] = useState(true);
     const [showImage, setShowImage] = useState(true);
 
+    const handleTabChange = useCallback(
+      (tab: PreviewTab) => {
+        setActiveTab(tab);
+        onActiveTabChange?.(tab);
+      },
+      [onActiveTabChange]
+    );
+
+    useEffect(() => {
+      setActiveTab(initialTab);
+    }, [initialTab]);
+
     // Sync local state with settings changes
     useEffect(() => {
       setContentBasedSections(settings?.contentBasedSections ?? true);
@@ -130,6 +149,67 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const [netDisplayDataUrl, setNetDisplayDataUrl] = useState<string | null>(null);
     const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
     const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+
+    useEffect(() => {
+      const savedImageId = settings?.selectedBackgroundImageId ?? null;
+
+      if (!savedImageId) {
+        setSelectedImageId(null);
+        setBgImage(null);
+        return;
+      }
+
+      if (savedImageId === selectedImageId && bgImage) {
+        return;
+      }
+
+      let cancelled = false;
+
+      const loadSavedBackground = async () => {
+        let dataUrl: string | null = null;
+
+        if (savedImageId.startsWith("ext:")) {
+          const path = savedImageId.slice(4);
+          if (window.electronAPI?.readImageAsDataUrl) {
+            dataUrl = await window.electronAPI.readImageAsDataUrl(path);
+          }
+        } else {
+          const internalImages = await imageStorageService.getAllImages();
+          dataUrl = internalImages.find((img) => img.id === savedImageId)?.dataUrl ?? null;
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!dataUrl) {
+          setSelectedImageId(null);
+          setBgImage(null);
+          updateSettingWithAutoSave("selectedBackgroundImageId", null);
+          return;
+        }
+
+        setSelectedImageId(savedImageId);
+        const img = new Image();
+        img.onload = () => {
+          if (!cancelled) {
+            setBgImage(img);
+          }
+        };
+        img.onerror = () => {
+          if (!cancelled) {
+            setBgImage(null);
+          }
+        };
+        img.src = dataUrl;
+      };
+
+      loadSavedBackground();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [settings?.selectedBackgroundImageId, selectedImageId, bgImage, updateSettingWithAutoSave]);
 
     const generatorRef = useRef<SectionGenerator | null>(null);
     const rendererRef = useRef<SectionRenderer | null>(null);
@@ -542,7 +622,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         checkSectionsProjectable: settings?.checkSectionsProjectable ?? true,
         allowFontSizeReduction: settings?.displayAllowFontSizeReduction ?? true,
         displayFaultThreshold: 10,
-        nonSplittingWords: settings?.nonSplittingWordList || [],
+        nonSplittingWords: settings?.useNonSplittingWords ? (settings?.nonSplittingWordList ?? []) : [],
         displayMinimumFontSize: settings?.displayMinimumFontSize || 0,
         displayMinimumFontSizePercent: settings?.displayMinimumFontSizePercent || 70,
       };
@@ -816,7 +896,11 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
             bgColor: settings?.backgroundColor || "#000000",
             textBorderColor: settings?.textBorderColor || "#000000",
             textBorderWidth: settings?.textBorderWidth || 0,
+            textShadowEnabled: settings?.displayTextShadowEnabled ?? false,
             textShadowOffset: settings?.displayTextShadowOffset ?? 2,
+            textShadowBlur: settings?.displayTextShadowBlur ?? 4,
+            textShadowColor: settings?.displayTextShadowColor || "#000000",
+            textShadowOpacity: settings?.displayTextShadowOpacity ?? 0.8,
             renderWidth: projectorWidth,
             renderHeight: projectorHeight,
             marginLeft: settings?.displayBorderRect?.left || 0,
@@ -865,7 +949,11 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           bgColor: settings?.backgroundColor || "#000000",
           textBorderColor: settings?.textBorderColor || "#000000",
           textBorderWidth: settings?.textBorderWidth || 0,
+          textShadowEnabled: settings?.displayTextShadowEnabled ?? false,
           textShadowOffset: settings?.displayTextShadowOffset ?? 2,
+          textShadowBlur: settings?.displayTextShadowBlur ?? 4,
+          textShadowColor: settings?.displayTextShadowColor || "#000000",
+          textShadowOpacity: settings?.displayTextShadowOpacity ?? 0.8,
           renderWidth: projectorWidth,
           renderHeight: projectorHeight,
           marginLeft: settings?.displayBorderRect?.left || 0,
@@ -1397,6 +1485,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                 onOpenImageSettings={() => onSettingsClick?.("images")}
                 onSelectImage={(imageId, dataUrl) => {
                   setSelectedImageId(imageId);
+                  updateSettingWithAutoSave("selectedBackgroundImageId", imageId);
                   if (dataUrl) {
                     const img = new Image();
                     img.onload = () => setBgImage(img);
@@ -1802,7 +1891,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        setActiveTab("format");
+                        handleTabChange("format");
                       }}
                     >
                       {t("Format")}
@@ -1814,7 +1903,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        setActiveTab("image");
+                        handleTabChange("image");
                       }}
                     >
                       {t("Image")}
@@ -1826,7 +1915,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        setActiveTab("message");
+                        handleTabChange("message");
                       }}
                     >
                       {t("Message")}

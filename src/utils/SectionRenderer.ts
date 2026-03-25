@@ -12,7 +12,11 @@ export interface RenderSettings {
   bgColor: string;
   textBorderColor: string;
   textBorderWidth: number;
+  textShadowEnabled: boolean;
   textShadowOffset: number;
+  textShadowBlur: number;
+  textShadowColor: string;
+  textShadowOpacity: number;
   renderWidth: number;
   renderHeight: number;
   backgroundImageFit: "touchInner" | "touchOuter" | "stretch";
@@ -604,10 +608,13 @@ export class SectionRenderer {
     const wrappedText = this.wrapText(text, settings.fontFamily, fontSize, settings.bold, settings.italic, renderRect.width);
 
     // Draw shadow first (if enabled)
-    if (settings.textShadowOffset > 0) {
+    if (settings.textShadowEnabled) {
       this.ctx.save();
-      this.ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-      this.ctx.shadowBlur = 4;
+      const shadowAlpha = Math.max(0, Math.min(1, settings.textShadowOpacity));
+      // Convert hex color to RGB and apply opacity
+      const rgbColor = this.hexToRgb(settings.textShadowColor);
+      this.ctx.shadowColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${shadowAlpha})`;
+      this.ctx.shadowBlur = Math.max(0, settings.textShadowBlur);
       this.ctx.shadowOffsetX = settings.textShadowOffset;
       this.ctx.shadowOffsetY = settings.textShadowOffset;
       this.ctx.fillStyle = settings.textColor;
@@ -632,6 +639,24 @@ export class SectionRenderer {
     if (settings.underline) {
       this.drawUnderline(wrappedText, x, y, renderRect.width, settings.fontFamily, fontSize, settings.bold, settings.italic, settings.textColor);
     }
+  }
+
+  /**
+   * Convert hex color to RGB components
+   */
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    let cleanHex = hex.replace(/^#/, "");
+
+    // Handle shorthand hex (#RGB -> #RRGGBB)
+    if (cleanHex.length === 3) {
+      cleanHex = cleanHex[0]! + cleanHex[0]! + cleanHex[1]! + cleanHex[1]! + cleanHex[2]! + cleanHex[2]!;
+    }
+
+    const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+    const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+    const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+
+    return { r, g, b };
   }
 
   /**

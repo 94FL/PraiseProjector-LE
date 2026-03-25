@@ -86,11 +86,17 @@ export const useResponsiveFontSize = () => {
   const { settings } = useSettings();
   const [effectiveFontSize, setEffectiveFontSize] = useState<number>(16);
   const lastAppliedFontSizeRef = useRef<number | null>(null);
+  const overflowCheckTimeoutRef = useRef<number | null>(null);
   const baseFontSize = settings?.baseFontSize || 16;
   const autoAdjustFontSize = settings?.autoAdjustFontSize ?? true;
 
   useEffect(() => {
     const updateFontSize = () => {
+      if (overflowCheckTimeoutRef.current !== null) {
+        window.clearTimeout(overflowCheckTimeoutRef.current);
+        overflowCheckTimeoutRef.current = null;
+      }
+
       if (autoAdjustFontSize) {
         // Use calculateAutoFontSize which always uses a fixed 16px reference base,
         // keeping auto-selected size completely independent of the user's manual setting.
@@ -112,7 +118,7 @@ export const useResponsiveFontSize = () => {
 
         // After a short delay, check for overflow and reduce if necessary
         // This only runs on initial load and orientation changes, not on every resize
-        setTimeout(() => {
+        overflowCheckTimeoutRef.current = window.setTimeout(() => {
           let attempts = 0;
           const maxAttempts = 5;
 
@@ -133,6 +139,7 @@ export const useResponsiveFontSize = () => {
             //   `Font size adjusted from ${calculateAutoFontSize(window.screen.width)}px to ${calculatedSize}px to prevent overflow`
             // );
           }
+          overflowCheckTimeoutRef.current = null;
         }, 100);
       } else {
         // Use manual font size setting
@@ -162,6 +169,10 @@ export const useResponsiveFontSize = () => {
 
     return () => {
       window.removeEventListener("orientationchange", handleOrientationChange);
+      if (overflowCheckTimeoutRef.current !== null) {
+        window.clearTimeout(overflowCheckTimeoutRef.current);
+        overflowCheckTimeoutRef.current = null;
+      }
     };
   }, [baseFontSize, autoAdjustFontSize]);
 

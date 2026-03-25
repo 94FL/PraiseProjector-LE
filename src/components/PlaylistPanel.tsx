@@ -1476,7 +1476,7 @@ class PlaylistPanel extends React.Component<PlaylistPanelProps, PlaylistPanelSta
       checkSectionsProjectable: settings?.checkSectionsProjectable ?? true,
       allowFontSizeReduction: settings?.displayAllowFontSizeReduction ?? true,
       displayFaultThreshold: settings?.displayFaultThreshold ?? 10,
-      nonSplittingWords: settings?.nonSplittingWordList || [],
+      nonSplittingWords: settings?.useNonSplittingWords ? (settings?.nonSplittingWordList ?? []) : [],
       displayMinimumFontSize: settings?.displayMinimumFontSize || 0,
       displayMinimumFontSizePercent: settings?.displayMinimumFontSizePercent || 70,
     };

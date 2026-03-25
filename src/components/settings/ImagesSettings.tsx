@@ -163,66 +163,67 @@ const ImagesSettings: React.FC<ImagesSettingsProps> = ({ settings, updateSetting
 
   return (
     <div className="images-settings">
-      <div className="form-group mb-3">
-        <label htmlFor="backgroundImageFit">{t("BackgroundImageFit") || "Background Image Fit"}</label>
-        <select
-          className="form-select"
-          id="backgroundImageFit"
-          value={settings.backgroundImageFit || "touchInner"}
-          onChange={(e) => updateSetting("backgroundImageFit", e.target.value as Settings["backgroundImageFit"])}
-        >
-          {backgroundImageFitOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <small className="form-text text-muted">
-          {t("BackgroundImageFitHelp") ||
-            "Touch Inner keeps the whole image visible, Touch Outer fills the screen by cropping, Stretch fills the screen by distorting the image."}
-        </small>
-      </div>
-
-      {/* Picture folder setting - only visible in Electron mode */}
-      {isElectron && (
+      <div className="picture-settings-section">
         <div className="form-group mb-3">
-          <label htmlFor="pictureFolder">{t("SettingsPictureFolder")}</label>
-          <div className="input-group">
-            <input
-              type="text"
-              className="form-control"
-              id="pictureFolder"
-              value={settings.pictureFolder}
-              onChange={(e) => updateSetting("pictureFolder", e.target.value)}
-              placeholder={t("SettingsPictureFolderPlaceholder") || "Enter path to images folder..."}
-            />
-            <div className="input-group-append">
-              <button
-                className="btn btn-outline-secondary"
-                type="button"
-                onClick={() => {
-                  // Use Electron's dialog if available
-                  if (window.electronAPI?.selectFolder) {
-                    window.electronAPI.selectFolder().then((path) => {
-                      if (path) {
-                        updateSetting("pictureFolder", path);
-                      }
-                    });
-                  }
-                }}
-              >
-                {t("SettingsBrowse")}
-              </button>
-            </div>
-          </div>
+          <label htmlFor="backgroundImageFit">{t("BackgroundImageFit") || "Background Image Fit"}</label>
+          <select
+            className="form-select"
+            id="backgroundImageFit"
+            value={settings.backgroundImageFit || "touchInner"}
+            onChange={(e) => updateSetting("backgroundImageFit", e.target.value as Settings["backgroundImageFit"])}
+          >
+            {backgroundImageFitOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <small className="form-text text-muted">
-            {t("SettingsPictureFolderDescription") || "Path to folder containing background images (Electron only)"}
+            {t("BackgroundImageFitHelp") ||
+              "Touch Inner keeps the whole image visible, Touch Outer fills the screen by cropping, Stretch fills the screen by distorting the image."}
           </small>
         </div>
-      )}
 
-      {/* Divider */}
-      {isElectron && <hr className="my-3" />}
+        {/* Picture folder setting - only visible in Electron mode */}
+        {isElectron && (
+          <div className="form-group mb-3">
+            <label htmlFor="pictureFolder">{t("SettingsPictureFolder")}</label>
+            <div className="input-group">
+              <input
+                type="text"
+                className="form-control"
+                id="pictureFolder"
+                value={settings.pictureFolder}
+                onChange={(e) => updateSetting("pictureFolder", e.target.value)}
+                placeholder={t("SettingsPictureFolderPlaceholder") || "Enter path to images folder..."}
+              />
+              <div className="input-group-append">
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  onClick={() => {
+                    // Use Electron's dialog if available
+                    if (window.electronAPI?.selectFolder) {
+                      window.electronAPI.selectFolder().then((path) => {
+                        if (path) {
+                          updateSetting("pictureFolder", path);
+                        }
+                      });
+                    }
+                  }}
+                >
+                  {t("SettingsBrowse")}
+                </button>
+              </div>
+            </div>
+            <small className="form-text text-muted">
+              {t("SettingsPictureFolderDescription") || "Path to folder containing background images (Electron only)"}
+            </small>
+          </div>
+        )}
+      </div>
+
+      <div className="picture-settings-divider" />
 
       {/* Internal Image Storage */}
       <div className="internal-images-section">
@@ -236,7 +237,8 @@ const ImagesSettings: React.FC<ImagesSettingsProps> = ({ settings, updateSetting
         <div className="alert alert-warning py-2 mb-2">
           <i className="fa fa-exclamation-triangle me-2"></i>
           <strong>{t("Warning") || "Warning"}:</strong>{" "}
-          {t("ImageChangesPermanentWarning") || "All changes on this page (import/delete) are applied immediately and cannot be undone."}
+          {t("ImageChangesPermanentWarning") ||
+            "All changes in the image storage maintainer section (import/delete) are applied immediately and cannot be undone."}
         </div>
 
         {/* Storage info */}
