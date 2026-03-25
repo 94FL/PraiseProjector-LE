@@ -2,6 +2,7 @@ import React from "react";
 import { Settings } from "../../types";
 import { useTheme, ThemeSetting } from "../../contexts/ThemeContext";
 import { useLocalization, LanguageSetting } from "../../localization/LocalizationContext";
+import { calculateAutoFontSize } from "../../hooks/useResponsiveFontSize";
 import "./GeneralSettings.css";
 
 const MAX_MARGIN_SUM = 95;
@@ -173,7 +174,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, updateSetti
             <select
               id="baseFontSize"
               className="form-control"
-              value={settings.baseFontSize}
+              value={settings.autoAdjustFontSize ? calculateAutoFontSize(window.screen.width) : settings.baseFontSize}
               onChange={(e) => updateSetting("baseFontSize", parseInt(e.target.value))}
               disabled={settings.autoAdjustFontSize}
             >
