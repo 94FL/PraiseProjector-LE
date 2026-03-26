@@ -1705,17 +1705,29 @@ const AppContent: React.FC = () => {
         return;
       }
 
+      const fileName = `ppdb_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.ppdb`;
+
+      if (window.electronAPI?.saveDatabaseFile) {
+        const blob = compressDatabaseToZip(dbContent);
+        const data = await blob.arrayBuffer();
+        const result = await window.electronAPI.saveDatabaseFile(data, fileName);
+        if (result.success) {
+          showMessage(t("ExportDatabaseTitle"), t("ExportSuccess"));
+        } else if (result.error !== "Cancelled") {
+          showMessage(t("Error"), t("ExportFailed"));
+        }
+        return;
+      }
+
       const blob = compressDatabaseToZip(dbContent);
       const url = URL.createObjectURL(blob);
-
       const link = document.createElement("a");
       link.href = url;
-      link.download = `ppdb_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.ppdb`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
       showMessage(t("ExportDatabaseTitle"), t("ExportSuccess"));
     } catch (error) {
       console.error("App", "Failed to export database", error);

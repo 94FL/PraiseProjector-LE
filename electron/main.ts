@@ -748,6 +748,30 @@ ipcMain.handle("load-playlist-file", async () => {
   }
 });
 
+// IPC handler for database export file save
+ipcMain.handle("save-database-file", async (_event, payload: { data: ArrayBuffer; defaultFileName?: string }) => {
+  try {
+    const result = await dialog.showSaveDialog({
+      title: "Export Database",
+      defaultPath: payload?.defaultFileName || "database.ppdb",
+      filters: [
+        { name: "PraiseProjector Database", extensions: ["ppdb"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, error: "Cancelled" };
+    }
+
+    const data = payload?.data ? Buffer.from(new Uint8Array(payload.data)) : Buffer.alloc(0);
+    await fs.promises.writeFile(result.filePath, data);
+    return { success: true, filePath: result.filePath };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 // Settings sync from renderer - update webserver settings
 ipcMain.on("sync-settings", (_event, settings: Settings) => {
   console.log("Settings synced from renderer:", settings);

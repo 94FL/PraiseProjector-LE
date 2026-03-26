@@ -41,6 +41,7 @@ export interface IElectronAPI {
   // Playlist file operations (optional - falls back to browser APIs)
   savePlaylistFile?: (content: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
   loadPlaylistFile?: () => Promise<{ success: boolean; content?: string; error?: string }>;
+  saveDatabaseFile?: (data: ArrayBuffer, defaultFileName?: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
 
   // Display/Monitor management (optional - for Electron projector functionality)
   getAllDisplays?: () => Promise<MonitorDisplay[]>;

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Playlist file operations
   savePlaylistFile: (content: string) => ipcRenderer.invoke("save-playlist-file", content),
   loadPlaylistFile: () => ipcRenderer.invoke("load-playlist-file"),
+  saveDatabaseFile: (data: ArrayBuffer, defaultFileName?: string) => ipcRenderer.invoke("save-database-file", { data, defaultFileName }),
 
   // Proxy operations
   proxyGet: (baseUrl: string, path: string, headers?: Record<string, string>) => ipcRenderer.invoke("proxy-get", baseUrl, path, headers),
