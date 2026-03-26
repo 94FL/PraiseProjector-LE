@@ -31,6 +31,8 @@ interface LeaderDataMergeDialogProps {
   localLabel?: string;
   /** Custom label for the "remote" side (defaults to localized "Remote") */
   remoteLabel?: string;
+  /** Read-only compare mode: hides decision actions and save button */
+  readOnly?: boolean;
 }
 
 // Interface for hover popup state
@@ -40,7 +42,15 @@ interface HoverPopupState {
   y: number;
 }
 
-const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLeader, remoteLeader, onSave, onCancel, localLabel, remoteLabel }) => {
+const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({
+  localLeader,
+  remoteLeader,
+  onSave,
+  onCancel,
+  localLabel,
+  remoteLabel,
+  readOnly = false,
+}) => {
   const { t } = useLocalization();
   const effectiveLocalLabel = localLabel || t("LeaderMergeLocal");
   const effectiveRemoteLabel = remoteLabel || t("LeaderMergeRemote");
@@ -642,15 +652,16 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
               <button type="button" className="btn-close" onClick={onCancel} title={t("CloseDialog")} aria-label={t("Close")}></button>
             </div>
             <div className="modal-body leader-merge-body">
-              {/* Quick selection buttons */}
-              <div className="merge-quick-actions mb-3">
-                <button type="button" className="btn btn-outline-primary me-2" onClick={handleSelectAllLocal}>
-                  {t("LeaderMergeSelectAll") || "Select All"} {effectiveLocalLabel}
-                </button>
-                <button type="button" className="btn btn-outline-primary" onClick={handleSelectAllRemote}>
-                  {t("LeaderMergeSelectAll") || "Select All"} {effectiveRemoteLabel}
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="merge-quick-actions mb-3">
+                  <button type="button" className="btn btn-outline-primary me-2" onClick={handleSelectAllLocal}>
+                    {t("LeaderMergeSelectAll") || "Select All"} {effectiveLocalLabel}
+                  </button>
+                  <button type="button" className="btn btn-outline-primary" onClick={handleSelectAllRemote}>
+                    {t("LeaderMergeSelectAll") || "Select All"} {effectiveRemoteLabel}
+                  </button>
+                </div>
+              )}
 
               {/* Song Preferences Section */}
               <div className="merge-section">
@@ -693,6 +704,7 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
                                 className={`btn btn-sm merge-source-btn ${!conflict.useRemote ? "btn-primary" : "btn-outline-secondary"}`}
                                 onClick={() => handlePreferenceToggle(index)}
                                 title={effectiveLocalLabel}
+                                disabled={readOnly}
                               >
                                 {!conflict.useRemote ? "✓" : ""}
                               </button>
@@ -704,6 +716,7 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
                                 className={`btn btn-sm merge-source-btn ${conflict.useRemote ? "btn-primary" : "btn-outline-secondary"}`}
                                 onClick={() => handlePreferenceToggle(index)}
                                 title={effectiveRemoteLabel}
+                                disabled={readOnly}
                               >
                                 {conflict.useRemote ? "✓" : ""}
                               </button>
@@ -760,6 +773,7 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
                                     className={`btn btn-sm merge-source-btn ${!conflict.useRemote ? "btn-primary" : "btn-outline-secondary"}`}
                                     onClick={() => handleScheduleToggle(index)}
                                     title={effectiveLocalLabel}
+                                    disabled={readOnly}
                                   >
                                     {!conflict.useRemote ? "✓" : ""}
                                   </button>
@@ -771,6 +785,7 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
                                     className={`btn btn-sm merge-source-btn ${conflict.useRemote ? "btn-primary" : "btn-outline-secondary"}`}
                                     onClick={() => handleScheduleToggle(index)}
                                     title={effectiveRemoteLabel}
+                                    disabled={readOnly}
                                   >
                                     {conflict.useRemote ? "✓" : ""}
                                   </button>
@@ -801,11 +816,13 @@ const LeaderDataMergeDialog: React.FC<LeaderDataMergeDialogProps> = ({ localLead
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={onCancel}>
-                {t("Cancel")}
+                {readOnly ? t("Close") : t("Cancel")}
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleSave}>
-                {t("Save")}
-              </button>
+              {!readOnly && (
+                <button type="button" className="btn btn-primary" onClick={handleSave}>
+                  {t("Save")}
+                </button>
+              )}
             </div>
           </div>
         </div>

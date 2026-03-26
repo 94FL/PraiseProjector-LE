@@ -92,6 +92,10 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
   const [compareDialogItem, setCompareDialogItem] = useState<SyncListItem | null>(null);
   const [leaderMergeDialogItem, setLeaderMergeDialogItem] = useState<SyncListItem | null>(null);
 
+  // In-memory backups for recently pulled items (captured before DB overwrite)
+  const pulledSongBackupRef = useRef<Map<string, Song>>(new Map());
+  const pulledLeaderBackupRef = useRef<Map<string, Leader>>(new Map());
+
   // State for locally updated songs decision dialog
   const [showUpdatedSongsDialog, setShowUpdatedSongsDialog] = useState(false);
   const [updatedSongsDecisions, setUpdatedSongsDecisions] = useState<Map<string, "upload" | "revert" | "skip">>(new Map());
@@ -455,6 +459,8 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
 
     try {
       const newItems: SyncListItem[] = [];
+      pulledSongBackupRef.current.clear();
+      pulledLeaderBackupRef.current.clear();
       _setUploadDenied(!response.upload_enabled);
 
       // Process downloaded songs
@@ -508,6 +514,9 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
             // Do NOT save server version yet - wait for conflict resolution
           }
         } else {
+          if (existing) {
+            pulledSongBackupRef.current.set(s.songId, existing.clone());
+          }
           /*          
           const similar = database.findSimilarSongs(song, false).filter((x) => x.Id !== s.songId);
           if (similar.length > 0) {
@@ -594,6 +603,9 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
           existing.equals(leader) ||
           !updateableLeadersSet.has(l.leaderId)
         ) {
+          if (existing) {
+            pulledLeaderBackupRef.current.set(l.leaderId, existing.clone());
+          }
           newItems.push({
             id: l.leaderId,
             title: l.leaderName,
@@ -846,6 +858,48 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
     }
   };
 
+  const canCompareRecentPulledItem = useCallback((item: SyncListItem): boolean => {
+    if (item.group !== SyncItemGroup.Pulled) return false;
+    return item.type === SyncItemType.Song ? pulledSongBackupRef.current.has(item.id) : pulledLeaderBackupRef.current.has(item.id);
+  }, []);
+
+  const handleRecentCompareClick = useCallback(
+    (item: SyncListItem) => {
+      if (item.group !== SyncItemGroup.Pulled) return;
+
+      if (item.type === SyncItemType.Song) {
+        const pulledSongItems = items.filter((x) => x.group === SyncItemGroup.Pulled && x.type === SyncItemType.Song);
+        const pairs: Array<{ left: Song; right: Song; id: string }> = [];
+
+        for (const pulledItem of pulledSongItems) {
+          const backup = pulledSongBackupRef.current.get(pulledItem.id);
+          const pulled = pulledItem.data as Song | null;
+          if (!backup || !pulled) continue;
+          pairs.push({ left: backup, right: pulled, id: pulledItem.id });
+        }
+
+        if (pairs.length === 0) return;
+
+        const initialPairIndex = Math.max(
+          0,
+          pairs.findIndex((p) => p.id === item.id)
+        );
+
+        setCompareDialogItem({
+          ...item,
+          data: { pairs, initialPairIndex },
+        });
+        return;
+      }
+
+      const backupLeader = pulledLeaderBackupRef.current.get(item.id);
+      const pulledLeader = item.data as Leader;
+      if (!backupLeader || !pulledLeader) return;
+      setLeaderMergeDialogItem({ ...item, data: { local: backupLeader, remote: pulledLeader } });
+    },
+    [items]
+  );
+
   // Remove an item from the list and check if we should auto-sync or close
   const removeItemAndCheckSync = useCallback((itemId: string) => {
     setItems((prevItems) => {
@@ -935,6 +989,10 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
       setLeaderMergeDialogItem(null);
 
       if (!item) return;
+
+      if (item.group === SyncItemGroup.Pulled) {
+        return;
+      }
 
       database.updateLeader(mergedLeader);
       removeItemAndCheckSync(item.id);
@@ -1156,6 +1214,7 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
             <div className="sync-group-items">
               {groupItems.map((item) => {
                 const interactive = isInteractiveItem(item);
+                const hasRecentCompare = canCompareRecentPulledItem(item);
                 return (
                   <div
                     key={item.id}
@@ -1175,6 +1234,18 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
                         title="Resolve"
                       >
                         ⋯
+                      </button>
+                    )}
+                    {hasRecentCompare && (
+                      <button
+                        className="btn btn-sm btn-outline-info sync-item-resolve-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRecentCompareClick(item);
+                        }}
+                        title={t("Compare") || "Compare"}
+                      >
+                        {t("Compare") || "Compare"}
                       </button>
                     )}
                   </div>
@@ -1224,6 +1295,19 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
         songsToCompare: [data.original], // Server version
         mode: "Conflict" as const,
       };
+    } else if (compareDialogItem.group === SyncItemGroup.Pulled) {
+      const data = compareDialogItem.data as { pairs: Array<{ left: Song; right: Song; id: string }>; initialPairIndex: number };
+      if (!data.pairs || data.pairs.length === 0) {
+        return null;
+      }
+
+      return {
+        comparePairs: data.pairs.map((pair) => ({ left: pair.left, right: pair.right })),
+        initialPairIndex: data.initialPairIndex,
+        mode: "ComparePairs" as const,
+        leftLabel: t("OriginalVersion") || "Original Version",
+        rightLabel: t("NewVersionOnServer") || "Downloaded Version",
+      };
     } else if (compareDialogItem.group === SyncItemGroup.Checking) {
       const data = compareDialogItem.data as { song: Song; similar: Song[] };
       return {
@@ -1243,6 +1327,7 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
     return {
       localLeader: data.local,
       remoteLeader: data.remote,
+      readOnly: leaderMergeDialogItem.group === SyncItemGroup.Pulled,
     };
   };
 
@@ -1324,7 +1409,11 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
         <CompareDialog
           originalSong={compareDialogProps.originalSong}
           songsToCompare={compareDialogProps.songsToCompare}
+          comparePairs={compareDialogProps.comparePairs}
+          initialPairIndex={compareDialogProps.initialPairIndex}
           mode={compareDialogProps.mode}
+          leftLabel={compareDialogProps.leftLabel}
+          rightLabel={compareDialogProps.rightLabel}
           onClose={handleCompareDialogClose}
         />
       )}
@@ -1334,6 +1423,7 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
         <LeaderDataMergeDialog
           localLeader={leaderMergeProps.localLeader}
           remoteLeader={leaderMergeProps.remoteLeader}
+          readOnly={leaderMergeProps.readOnly}
           onSave={handleLeaderMergeDialogSave}
           onCancel={handleLeaderMergeDialogCancel}
         />

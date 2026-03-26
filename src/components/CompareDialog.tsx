@@ -28,9 +28,11 @@ export function convertHistoryEntriesToSongsWithHistory(historyEntries: SongHist
 }
 
 interface CompareDialogProps {
-  originalSong: Song | null;
-  songsToCompare: Song[];
-  mode: "ViewOnly" | "Verify" | "Import" | "Conflict" | "History" | "SongCheck";
+  originalSong?: Song | null;
+  songsToCompare?: Song[];
+  mode: "ViewOnly" | "Verify" | "Import" | "Conflict" | "History" | "SongCheck" | "ComparePairs";
+  comparePairs?: Array<{ left: Song; right: Song }>;
+  initialPairIndex?: number;
   onClose: (mergedSong?: Song, importDecision?: ImportDecision) => void;
   leftLabel?: string;
   rightLabel?: string;
@@ -60,9 +62,11 @@ const getVersionLabel = (
 };
 
 const CompareDialog: React.FC<CompareDialogProps> = ({
-  originalSong,
-  songsToCompare,
+  originalSong = null,
+  songsToCompare = [],
   mode,
+  comparePairs,
+  initialPairIndex = 0,
   onClose,
   leftLabel,
   rightLabel,
@@ -73,7 +77,7 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
   songCheckState,
 }) => {
   const { t } = useLocalization();
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(initialPairIndex);
   const [showDiff, setShowDiff] = useState(false);
 
   // For History mode: track selected indices for left and right panels
@@ -85,6 +89,7 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
   const isHistoryMode = mode === "History";
   const isImportMode = mode === "Import";
   const isSongCheckMode = mode === "SongCheck";
+  const isComparePairsMode = mode === "ComparePairs";
 
   // Build version list for History mode dropdowns
   const buildVersionList = (): { label: string; song: Song }[] => {
@@ -130,9 +135,19 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
 
   // Get current compared song for non-History modes
   const comparedSong = songsToCompare[currentIndex];
+  const currentPair = isComparePairsMode && comparePairs && comparePairs.length > 0 ? comparePairs[currentIndex] : null;
+  const navItemCount = isComparePairsMode ? (comparePairs?.length ?? 0) : songsToCompare.length;
 
-  const leftContent = isHistoryMode ? getLeftSongForHistory()?.Text || "" : originalSong?.Text || "";
-  const rightContent = isHistoryMode ? getRightSongForHistory()?.Text || "" : comparedSong?.Text || "";
+  const leftContent = isHistoryMode
+    ? getLeftSongForHistory()?.Text || ""
+    : isComparePairsMode
+      ? currentPair?.left.Text || ""
+      : originalSong?.Text || "";
+  const rightContent = isHistoryMode
+    ? getRightSongForHistory()?.Text || ""
+    : isComparePairsMode
+      ? currentPair?.right.Text || ""
+      : comparedSong?.Text || "";
 
   const handleSaveLeft = () => {
     if (originalSong) {
@@ -159,7 +174,7 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
   };
 
   const handleNext = () => {
-    if (currentIndex < songsToCompare.length - 1) {
+    if (currentIndex < navItemCount - 1) {
       setCurrentIndex(currentIndex + 1);
     }
   };
@@ -206,9 +221,11 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
                   ? t("SongCheckCurrentVersion")
                   : isImportMode
                     ? t("SongToImport")
-                    : mode === "Conflict"
-                      ? t("LocallyModifiedVersion")
-                      : t("ActualSong"))}
+                    : isComparePairsMode
+                      ? t("OriginalVersion")
+                      : mode === "Conflict"
+                        ? t("LocallyModifiedVersion")
+                        : t("ActualSong"))}
             </label>
           )}
           <ChordProEditor
@@ -248,9 +265,11 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
                   ? t("SongCheckProposedVersion")
                   : isImportMode
                     ? t("SimilarSongInDatabase")
-                    : mode === "Conflict"
+                    : isComparePairsMode
                       ? t("NewVersionOnServer")
-                      : t("SimilarSongInDatabase"))}
+                      : mode === "Conflict"
+                        ? t("NewVersionOnServer")
+                        : t("SimilarSongInDatabase"))}
             </label>
           )}
           <ChordProEditor
@@ -269,8 +288,8 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
     );
   };
 
-  // In History and SongCheck modes, hide prev/next buttons; in Import mode show them for navigating similar songs
-  const showNavButtons = !isHistoryMode && !isSongCheckMode;
+  // Arrows are only for read-only browsing flows.
+  const showNavButtons = mode === "ViewOnly" || isComparePairsMode;
 
   return (
     <div className="modal-backdrop show compare-dialog-backdrop">
@@ -294,7 +313,7 @@ const CompareDialog: React.FC<CompareDialogProps> = ({
                 {showDiff ? t("HideDifferences") : t("ShowDifferences")}
               </button>
               {showNavButtons && (
-                <button className="btn btn-secondary" onClick={handleNext} disabled={currentIndex >= songsToCompare.length - 1}>
+                <button className="btn btn-secondary" onClick={handleNext} disabled={currentIndex >= navItemCount - 1}>
                   &gt;&gt;
                 </button>
               )}
