@@ -175,6 +175,7 @@ export class FilterData {
   private normalized: string;
   private wholeWords: boolean;
   private useTextSimilarities: boolean;
+  private lastWordIsPrefix: boolean;
   private _simplified: string | null = null;
   private _words: string[] | null = null;
   private matches: WordMatch[] | null = null;
@@ -204,10 +205,12 @@ export class FilterData {
       caseSensitive?: boolean;
       wholeWords?: boolean;
       useTextSimilarities?: boolean;
+      lastWordIsPrefix?: boolean;
     }
   ) {
     this.wholeWords = options?.wholeWords ?? false;
     this.useTextSimilarities = options?.useTextSimilarities ?? true;
+    this.lastWordIsPrefix = options?.lastWordIsPrefix ?? false;
     this.normalized = StringExtensions.minimizeSpaces(expr.toLowerCase());
   }
 
@@ -222,24 +225,31 @@ export class FilterData {
         const word = words[i++]!;
         const m = new WordMatch(word);
 
-        const allowPrefixBonus = i === l && !this.wholeWords;
+        const allowPrefixBonus = i === l && !this.wholeWords && this.lastWordIsPrefix;
+        const prefixCost = this.useTextSimilarities ? 0.01 : 0.0;
         const allowedMaxCost = this.useTextSimilarities && !this.wholeWords ? Math.max(word.length >= 3 ? 1.5 : 0.0, 0.9) : 0.0;
+        const prefixMaxCost = this.useTextSimilarities ? (word.length <= 2 ? 0.9 : word.length === 3 ? 1.0 : word.length === 4 ? 1.2 : 1.5) : 0.0;
 
-        const aiResults = songWords.aiMatches(m.word, allowPrefixBonus, allowedMaxCost);
-        for (const sp of aiResults) {
-          m.add(sp.song, sp.pos, sp.cost);
-        }
-
-        // Supplement prefix matching: for short last words, aiMatches may miss prefix
-        // matches due to candidate set and maxCost limitations in SongWords.
-        if (allowPrefixBonus && word.length <= 2) {
-          for (const sp of songWords.prefixMatches(word, 0.01)) {
+        if (allowPrefixBonus) {
+          // For the actively typed last token, enforce prefix semantics.
+          // With text similarities enabled, allow fuzzy matching against word prefixes only.
+          // This keeps incremental typing monotonic while still tolerating small typos/accents.
+          const prefixResults = this.useTextSimilarities
+            ? songWords.fuzzyPrefixMatches(word, prefixMaxCost)
+            : songWords.prefixMatches(word, prefixCost);
+          for (const sp of prefixResults) {
+            m.add(sp.song, sp.pos, sp.cost);
+          }
+        } else {
+          const aiResults = songWords.aiMatches(m.word, false, allowedMaxCost);
+          for (const sp of aiResults) {
             m.add(sp.song, sp.pos, sp.cost);
           }
         }
 
         if (!m.empty) {
-          m.filterPositions(allowedMaxCost);
+          const maxWordCost = allowPrefixBonus ? (this.useTextSimilarities ? prefixMaxCost : prefixCost) : allowedMaxCost;
+          m.filterPositions(maxWordCost);
           filters.push(m);
         }
       }
@@ -1312,6 +1322,7 @@ class Database {
           caseSensitive,
           wholeWords,
           useTextSimilarities,
+          lastWordIsPrefix,
         });
         let minCost = Infinity;
         const filters = filterData.matchesTo(this.words);
@@ -1322,11 +1333,9 @@ class Database {
             (song.TextOnly ? includeItemsWithoutChords : includeItemsWithChords)
           ) {
             const [reason, cost] = this.filterMatch(song, filters, leader, settings);
-            if (
-              reason !== FoundReason.None &&
-              cost < Math.max(1.5 * minCost, minCost + 2) &&
-              Database.matchesTextConstraints(song, reason, queryWords, caseSensitive, wholeWords, lastWordIsPrefix)
-            ) {
+            const costGate = cost < Math.max(1.5 * minCost, minCost + 2);
+            const textConstraintsPassed = Database.matchesTextConstraints(song, reason, queryWords, caseSensitive, wholeWords, lastWordIsPrefix);
+            if (reason !== FoundReason.None && costGate && textConstraintsPassed) {
               const snippet = Database.generateTraditionalSnippet(song, searchExpr, reason, lastWordIsPrefix);
               res.addSong(song, reason, cost, leader, snippet);
               minCost = cost;
@@ -1424,6 +1433,13 @@ class Database {
     const leaderFilter = leader ? this.leaderFilters.get(leader) : undefined;
     if (leaderFilter && leaderFilter.has(song)) {
       return [FoundReason.None, cost, undefined];
+    }
+
+    // If query terms produced no word matches, this song cannot match.
+    // Without this guard, the fallback cost aggregation below treats
+    // an empty filter set as zero-cost and incorrectly matches everything.
+    if (filters.length === 0) {
+      return [FoundReason.None, Infinity, undefined];
     }
 
     let minCost = Infinity;

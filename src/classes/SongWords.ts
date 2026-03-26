@@ -27,6 +27,10 @@ export class SongWords {
   private trigramMap = new MultiMap<string, string>();
   private _version = 0;
 
+  private static normalizeToken(token: string): string {
+    return token.normalize("NFC").trim().toLowerCase();
+  }
+
   public get version(): number {
     return this._version;
   }
@@ -49,7 +53,7 @@ export class SongWords {
   }
 
   private indexWord(word: string) {
-    const token = word.trim().toLowerCase();
+    const token = SongWords.normalizeToken(word);
     if (!token) return;
 
     // Index the accented form
@@ -71,7 +75,7 @@ export class SongWords {
   }
 
   private unindexWord(word: string) {
-    const token = word.trim().toLowerCase();
+    const token = SongWords.normalizeToken(word);
     if (!token) return;
 
     const prefixLen = Math.min(3, token.length);
@@ -91,7 +95,7 @@ export class SongWords {
   }
 
   private addWordPosition(word: string, song: Song, pos: number, cost: number = 0) {
-    const token = word.trim().toLowerCase();
+    const token = SongWords.normalizeToken(word);
     if (!token) return;
 
     const wasNew = !this.posMap.has(token);
@@ -128,7 +132,7 @@ export class SongWords {
     }
 
     for (const word of allWords) {
-      const token = word.trim().toLowerCase();
+      const token = SongWords.normalizeToken(word);
       this.posMap.removeValue(token, (p) => p.song === song);
       if (!this.posMap.has(token)) {
         this.unindexWord(token);
@@ -166,7 +170,7 @@ export class SongWords {
   }
 
   private candidateWordsFor(word: string, nullCostPrefix: boolean): Set<string> {
-    const token = word.trim().toLowerCase();
+    const token = SongWords.normalizeToken(word);
     if (!token) return new Set();
 
     const candidates = new Set<string>();
@@ -296,12 +300,38 @@ export class SongWords {
    * Returns positions with the given cost. Bypasses candidate/cache logic.
    */
   public prefixMatches(prefix: string, cost: number): SongPos[] {
-    const lowerPrefix = prefix.toLowerCase();
+    const lowerPrefix = SongWords.normalizeToken(prefix);
     const unaccentedPrefix = StringExtensions.toUnaccented(lowerPrefix);
     return this.matches((w) => {
-      if (w.startsWith(lowerPrefix)) return cost;
-      if (StringExtensions.toUnaccented(w).startsWith(unaccentedPrefix)) return cost;
+      const normalizedWord = SongWords.normalizeToken(w);
+      if (normalizedWord.startsWith(lowerPrefix)) return cost;
+      if (StringExtensions.toUnaccented(normalizedWord).startsWith(unaccentedPrefix)) return cost;
       return NaN;
+    });
+  }
+
+  /**
+   * Find all positions where a word can match the given prefix with bounded edit distance.
+   * Only the beginning of each candidate word is compared, so non-prefix fuzzy matches are excluded.
+   */
+  public fuzzyPrefixMatches(prefix: string, maxCost: number): SongPos[] {
+    const token = SongWords.normalizeToken(prefix);
+    if (!token) return [];
+
+    const unaccentedToken = StringExtensions.toUnaccented(token);
+    return this.matches((w) => {
+      const normalizedWord = SongWords.normalizeToken(w);
+      if (!normalizedWord) return NaN;
+
+      const candidatePrefix = normalizedWord.substring(0, Math.min(token.length, normalizedWord.length));
+      const unaccentedWord = StringExtensions.toUnaccented(normalizedWord);
+      const unaccentedCandidatePrefix = unaccentedWord.substring(0, Math.min(unaccentedToken.length, unaccentedWord.length));
+
+      const accentedCost = DamerauLevenshtein.accentedDamerauLevenshteinDistanceBounded(token, candidatePrefix, maxCost);
+      const unaccentedCost = DamerauLevenshtein.accentedDamerauLevenshteinDistanceBounded(unaccentedToken, unaccentedCandidatePrefix, maxCost);
+      const cost = Math.min(accentedCost, unaccentedCost);
+
+      return isFinite(cost) && cost <= maxCost ? cost : NaN;
     });
   }
 }
