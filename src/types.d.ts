@@ -35,7 +35,8 @@ export interface Settings {
   traditionalSearchWholeWords: boolean;
   useFontAwesomeIcons: boolean;
   baseFontSize: number;
-  autoAdjustFontSize: boolean;
+  fontSizeMode: "manual" | "auto-resolution" | "auto-resolution-dpi";
+
   iWebEnabled: boolean;
   webServerPort: number;
   webServerPath: string;

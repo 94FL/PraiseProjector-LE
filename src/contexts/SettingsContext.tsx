@@ -78,7 +78,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       selectedBackgroundImageId: null,
       backgroundImageFit: "touchInner",
       baseFontSize: 16, // Base font size for UI scaling
-      autoAdjustFontSize: true, // Auto-adjust based on screen size
       webServerPath: "/",
       webServerPort: 19740,
       webServerDomainName: "",
@@ -101,6 +100,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       typesenseApiKey: "",
 
       useFontAwesomeIcons: true,
+      fontSizeMode: "auto-resolution-dpi", // Default to auto-resolution-dpi for better scaling on high-DPI displays
       allClientsCanUseLeaderMode: true, // C# default: True
       leaderModeClients: [],
       printingBB: false,
@@ -147,7 +147,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .loadSettings()
       .then((loadedSettings) => {
         // Merge defaults with loaded settings so new settings get their default values
-        const merged = { ...defaultSettings, ...loadedSettings };
+        const loaded = loadedSettings as Partial<Settings>;
+        const merged = { ...defaultSettings, ...loaded };
         if (merged.searchMethod !== "typesense") merged.searchMethod = "traditional";
         setSettings(merged);
         setInitialSettings(merged);

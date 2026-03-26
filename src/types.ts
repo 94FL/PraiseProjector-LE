@@ -52,7 +52,7 @@ export interface Settings {
 
   useFontAwesomeIcons: boolean;
   baseFontSize: number; // Base font size in pixels for UI scaling
-  autoAdjustFontSize: boolean; // Automatically adjust font size based on screen size
+  fontSizeMode: "manual" | "auto-resolution" | "auto-resolution-dpi";
 
   iWebEnabled: boolean;
   webServerPort: number;

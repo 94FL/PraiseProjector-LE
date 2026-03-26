@@ -13,6 +13,12 @@ interface GeneralSettingsProps {
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, updateSetting }) => {
   const { themeSetting, setThemeSetting } = useTheme();
   const { languageSetting, setLanguageSetting, t } = useLocalization();
+  const isManualFontSize = settings.fontSizeMode === "manual";
+  const screenMajorSize = Math.max(window.screen.width || 0, window.screen.height || 0);
+  const autoFontSizePreview =
+    settings.fontSizeMode === "auto-resolution-dpi"
+      ? calculateAutoFontSize(screenMajorSize, window.devicePixelRatio || 1, "auto-resolution-dpi")
+      : calculateAutoFontSize(screenMajorSize, window.devicePixelRatio || 1, "auto-resolution");
 
   return (
     <div className="container-fluid general-settings-root">
@@ -58,9 +64,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, updateSetti
             <select
               id="baseFontSize"
               className="form-control"
-              value={settings.autoAdjustFontSize ? calculateAutoFontSize(window.screen.width) : settings.baseFontSize}
+              value={isManualFontSize ? settings.baseFontSize : autoFontSizePreview}
               onChange={(e) => updateSetting("baseFontSize", parseInt(e.target.value))}
-              disabled={settings.autoAdjustFontSize}
+              disabled={!isManualFontSize}
             >
               <option value="10">{t("SettingsFontSizeExtraSmall")}</option>
               <option value="12">{t("SettingsFontSizeSmall")}</option>
@@ -72,18 +78,22 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, updateSetti
             </select>
             <small className="form-text text-muted">{t("SettingsUIFontSizeDescription")}</small>
           </div>
-          <div className="form-check">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="autoAdjustFontSize"
-              checked={settings.autoAdjustFontSize}
-              onChange={(e) => updateSetting("autoAdjustFontSize", e.target.checked)}
-            />
-            <label className="form-check-label" htmlFor="autoAdjustFontSize">
-              {t("SettingsAutoAdjustFontSize")}
-            </label>
-            <small className="form-text text-muted">{t("SettingsAutoAdjustFontSizeDescription")}</small>
+          <div className="form-group">
+            <label htmlFor="fontSizeMode">{t("SettingsUIFontSizeMode")}</label>
+            <select
+              id="fontSizeMode"
+              className="form-control"
+              value={settings.fontSizeMode}
+              onChange={(e) => {
+                const mode = e.target.value as Settings["fontSizeMode"];
+                updateSetting("fontSizeMode", mode);
+              }}
+            >
+              <option value="manual">{t("SettingsUIFontSizeModeManual")}</option>
+              <option value="auto-resolution">{t("SettingsUIFontSizeModeAutoResolution")}</option>
+              <option value="auto-resolution-dpi">{t("SettingsUIFontSizeModeAutoResolutionDpi")}</option>
+            </select>
+            <small className="form-text text-muted">{t("SettingsUIFontSizeModeDescription")}</small>
           </div>
           <div className="form-group">
             <label htmlFor="defaultChordSystem">{t("SettingsChordSystem")}</label>

@@ -22,14 +22,15 @@ const AUTO_BASE_SIZE = 16;
 
 /** The discrete step values that match the font-size selector options in settings */
 export const AUTO_FONT_SIZE_STEPS = [10, 12, 14, 16, 18, 20, 22];
+export type AutoFontSizeMode = "auto-resolution" | "auto-resolution-dpi";
 
 /**
- * Calculate the auto font size for a given screen width.
+ * Calculate the auto font size for a given screen major size (max(width, height)).
  * Always uses AUTO_BASE_SIZE as input so the result is never influenced
  * by a previously-set manual font size. Snaps to the nearest available step.
  */
-export const calculateAutoFontSize = (screenWidth: number): number => {
-  const raw = calculateFontSize(screenWidth, AUTO_BASE_SIZE);
+export const calculateAutoFontSize = (screenMajorSize: number, devicePixelRatio: number = 1, mode: AutoFontSizeMode = "auto-resolution"): number => {
+  const raw = calculateFontSize(screenMajorSize, baseFontFromDensity(screenMajorSize, devicePixelRatio, mode));
   return AUTO_FONT_SIZE_STEPS.reduce((prev, curr) => (Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev));
 };
 
@@ -67,6 +68,17 @@ const calculateFontSize = (screenWidth: number, baseFontSize: number): number =>
   return Math.round(baseFontSize * scaleFactor);
 };
 
+const baseFontFromDensity = (screenWidth: number, devicePixelRatio: number, mode: AutoFontSizeMode): number => {
+  if (mode !== "auto-resolution-dpi") {
+    return AUTO_BASE_SIZE;
+  }
+
+  const clampedDpr = Math.max(1, Math.min(3, devicePixelRatio || 1));
+  const dpiBoost = (clampedDpr - 1) * 0.12;
+  const smallScreenBoost = screenWidth < 768 ? 0.04 : 0;
+  return AUTO_BASE_SIZE * (1 + dpiBoost + smallScreenBoost);
+};
+
 /**
  * Check if the main content is overflowing and needs font size reduction
  */
@@ -88,7 +100,8 @@ export const useResponsiveFontSize = () => {
   const lastAppliedFontSizeRef = useRef<number | null>(null);
   const overflowCheckTimeoutRef = useRef<number | null>(null);
   const baseFontSize = settings?.baseFontSize || 16;
-  const autoAdjustFontSize = settings?.autoAdjustFontSize ?? true;
+  const fontSizeMode = settings?.fontSizeMode ?? "auto-resolution";
+  const isAutoMode = fontSizeMode !== "manual";
 
   useEffect(() => {
     const updateFontSize = () => {
@@ -97,10 +110,14 @@ export const useResponsiveFontSize = () => {
         overflowCheckTimeoutRef.current = null;
       }
 
-      if (autoAdjustFontSize) {
+      if (isAutoMode) {
         // Use calculateAutoFontSize which always uses a fixed 16px reference base,
         // keeping auto-selected size completely independent of the user's manual setting.
-        let calculatedSize = calculateAutoFontSize(window.screen.width);
+        let calculatedSize = calculateAutoFontSize(
+          Math.max(window.screen.width || 0, window.screen.height || 0),
+          window.devicePixelRatio || 1,
+          fontSizeMode === "auto-resolution-dpi" ? "auto-resolution-dpi" : "auto-resolution"
+        );
 
         // Skip DOM writes when the computed font size is unchanged.
         if (lastAppliedFontSizeRef.current === calculatedSize) {
@@ -136,7 +153,7 @@ export const useResponsiveFontSize = () => {
             lastAppliedFontSizeRef.current = calculatedSize;
             // console.debug(
             //   "General",
-            //   `Font size adjusted from ${calculateAutoFontSize(window.screen.width)}px to ${calculatedSize}px to prevent overflow`
+            //   `Font size adjusted from ${calculateAutoFontSize(window.screen.width, window.devicePixelRatio || 1)}px to ${calculatedSize}px to prevent overflow`
             // );
           }
           overflowCheckTimeoutRef.current = null;
@@ -174,11 +191,11 @@ export const useResponsiveFontSize = () => {
         overflowCheckTimeoutRef.current = null;
       }
     };
-  }, [baseFontSize, autoAdjustFontSize]);
+  }, [baseFontSize, isAutoMode, fontSizeMode]);
 
   return {
     effectiveFontSize,
     baseFontSize: settings?.baseFontSize || 16,
-    autoAdjust: settings?.autoAdjustFontSize ?? true,
+    autoAdjust: isAutoMode,
   };
 };
