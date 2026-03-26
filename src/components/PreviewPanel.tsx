@@ -113,8 +113,8 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const [projectInstructions, setProjectInstructions] = useState(settings?.projectInstructions ?? false);
     const [displayMessageEnabled, setDisplayMessageEnabled] = useState(false);
     const [freezePreview, setFreezePreview] = useState(false);
-    const [showText, setShowText] = useState(true);
-    const [showImage, setShowImage] = useState(true);
+    const [showText, setShowText] = useState(settings?.showTextInPreview ?? true);
+    const [showImage, setShowImage] = useState(settings?.showImageInPreview ?? true);
 
     const handleTabChange = useCallback(
       (tab: PreviewTab) => {
@@ -136,6 +136,14 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     useEffect(() => {
       setProjectInstructions(settings?.projectInstructions ?? false);
     }, [settings?.projectInstructions]);
+
+    useEffect(() => {
+      setShowText(settings?.showTextInPreview ?? true);
+    }, [settings?.showTextInPreview]);
+
+    useEffect(() => {
+      setShowImage(settings?.showImageInPreview ?? true);
+    }, [settings?.showImageInPreview]);
 
     // Projector state - matching C# DisplayForm
     const [projectorEnabled, setProjectorEnabled] = useState(false);
@@ -1145,7 +1153,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const toggleButton = (
       currentState: boolean,
       setter: (value: boolean) => void,
-      settingKey?: keyof Pick<Settings, "contentBasedSections" | "projectInstructions">
+      settingKey?: keyof Pick<Settings, "contentBasedSections" | "projectInstructions" | "showTextInPreview" | "showImageInPreview">
     ) => {
       const newState = !currentState;
       setter(newState);
@@ -1823,7 +1831,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                   <button
                     className={`btn ${showText ? "btn-light btn-active" : "btn-light"}`}
                     aria-label="Display Text"
-                    onClick={() => toggleButton(showText, setShowText)}
+                    onClick={() => toggleButton(showText, setShowText, "showTextInPreview")}
                     title={tt("display_lyrics")}
                   >
                     <Icon type={IconType.TEXT} />
@@ -1831,7 +1839,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                   <button
                     className={`btn ${showImage ? "btn-light btn-active" : "btn-light"}`}
                     aria-label="Display Image"
-                    onClick={() => toggleButton(showImage, setShowImage)}
+                    onClick={() => toggleButton(showImage, setShowImage, "showImageInPreview")}
                     title={tt("display_image")}
                   >
                     <Icon type={IconType.IMAGE} />

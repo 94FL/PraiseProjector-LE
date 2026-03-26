@@ -86,4 +86,6 @@ export interface Settings {
   qrCodeX: number;
   qrCodeY: number;
   qrCodeSizePercent: number;
+  showTextInPreview: boolean;
+  showImageInPreview: boolean;
 }
