@@ -502,7 +502,14 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
 
   private updateInlineSearchOptionsVisibility() {
     const width = this.filterBarRef?.getBoundingClientRect().width ?? 0;
-    const showInlineSearchOptions = width >= 32 * 16; // ~512px
+    // Use computed font size of the filter bar (fallback to 16px if not available)
+    let fontSize = 16;
+    if (this.filterBarRef) {
+      const computedStyle = window.getComputedStyle(this.filterBarRef);
+      const parsed = parseFloat(computedStyle.fontSize);
+      if (!isNaN(parsed)) fontSize = parsed;
+    }
+    const showInlineSearchOptions = width >= 28 * fontSize; // ~28em
     if (showInlineSearchOptions !== this.state.showInlineSearchOptions) {
       this.setState({ showInlineSearchOptions });
     }
@@ -1282,7 +1289,7 @@ class SongListPanel extends React.Component<SongListPanelProps, SongListPanelSta
               </>
             )}
             <button
-              className="btn btn-outline-secondary"
+              className="btn btn-outline-secondary song-filter-clear-btn"
               type="button"
               aria-label="Clear Filter"
               title={this.props.tt?.("song_filter_clear")}

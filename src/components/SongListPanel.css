@@ -345,6 +345,10 @@
   color: #495057;
 }
 
+.song-filter-clear-btn {
+  padding: 0 !important;
+}
+
 /* Ensure selected items always have readable text - override cost colors */
 .song-item.selected,
 .song-item.selected.cost-high,

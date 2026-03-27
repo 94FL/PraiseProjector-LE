@@ -385,18 +385,11 @@ const iconMap: Record<IconType, IconConfig> = {
         viewBox="0 0 40 40"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.6"
+        strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/* wand */}
-        <path d="M9 30 L27 12" />
-        <path d="M6.5 32.5 L10.5 28.5" />
-        {/* sparkles */}
-        <path d="M29 7 L29 12" />
-        <path d="M26.5 9.5 L31.5 9.5" />
-        <path d="M34 13 L34 17" />
-        <path d="M32 15 L36 15" />
+        <path d="M5 20 C 5 12, 20 12, 20 20 C 20 28, 35 28, 35 20" />
       </svg>
     ),
     faContentAlways: true,
