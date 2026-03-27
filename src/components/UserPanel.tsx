@@ -33,7 +33,18 @@ const UserPanel: React.FC<UserPanelProps> = ({
   onSongCheckClick,
 }) => {
   const { selectedLeader, setSelectedLeaderId, allLeaders } = useLeader();
-  const { isGuest, isLoading: isAuthLoading, username, user, logout, login, commitSession, setOnLoginSuccess } = useAuth();
+  const {
+    authStatus,
+    isGuest,
+    isAuthenticated,
+    isLoading: isAuthLoading,
+    username,
+    user,
+    logout,
+    login,
+    commitSession,
+    setOnLoginSuccess,
+  } = useAuth();
   const { settings } = useSettings();
   const { showMessage, showConfirmAsync } = useMessageBox();
   const { t } = useLocalization();
@@ -51,6 +62,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
   const lastPeekCheckRef = useRef(0);
   // Tracks which action to perform after successful login (null = none).
   const pendingActionAfterLoginRef = useRef<(() => void) | null>(null);
+  const deferredPostLoginActionRef = useRef<(() => void) | null>(null);
   // Keep refs to the latest callbacks so deferred calls after login
   // always use the re-rendered callback with fresh auth state.
   const onSyncClickRef = useRef(onSyncClick);
@@ -60,6 +72,18 @@ const UserPanel: React.FC<UserPanelProps> = ({
     onSyncClickRef.current = onSyncClick;
     onSongCheckClickRef.current = onSongCheckClick;
   }, [onSyncClick, onSongCheckClick]);
+
+  useEffect(() => {
+    // Execute deferred actions only after auth state is fully settled.
+    // This avoids a race where sync is retriggered before isAuthenticated updates,
+    // which would reopen the auth dialog unnecessarily.
+    if (!deferredPostLoginActionRef.current) return;
+    if (isAuthLoading || !isAuthenticated) return;
+
+    const action = deferredPostLoginActionRef.current;
+    deferredPostLoginActionRef.current = null;
+    setTimeout(() => action?.(), 0);
+  }, [isAuthLoading, isAuthenticated]);
 
   const peekIntervalSeconds = Math.max(MIN_PEEK_INTERVAL_SECONDS, (settings?.serverPeekIntervalMinutes ?? 60) * 60);
   const peekIntervalMs = peekIntervalSeconds * 1000;
@@ -84,14 +108,15 @@ const UserPanel: React.FC<UserPanelProps> = ({
         setCloudAuthFailed(false);
         lastPeekedLocalDbVersionRef.current = localDbVersion;
       } catch {
-        // During initial auth restore, avoid showing cloud-auth-failed state.
-        if (!isGuest && !isAuthLoading) setCloudAuthFailed(true);
+        // Only flag cloud auth failed if we're actually supposed to be authenticated.
+        // When offline with a saved username, isGuest=false but isAuthenticated=false too.
+        if (isAuthenticated && !isAuthLoading) setCloudAuthFailed(true);
         setPendingSongCount(0);
         setCloudDbVersion(null);
       }
       lastPeekCheckRef.current = Date.now();
     },
-    [isGuest, isAuthLoading, localDbVersion]
+    [isAuthenticated, isAuthLoading, localDbVersion]
   );
 
   // Keep a stable ref so the polling effect doesn't need fetchPeek in its deps.
@@ -249,9 +274,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
       if (pendingActionAfterLoginRef.current) {
         const action = pendingActionAfterLoginRef.current;
         pendingActionAfterLoginRef.current = null;
-        // Defer so React commits the auth state update first; the ref-based
-        // callbacks pick up the re-rendered version with fresh auth state.
-        setTimeout(() => action(), 0);
+        deferredPostLoginActionRef.current = action;
       }
     } else {
       showMessage(t("LoginFailed"), t("LoginFailedCheckCredentials"));
@@ -261,6 +284,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
   const handleLogout = async () => {
     await logout();
     pendingActionAfterLoginRef.current = null;
+    deferredPostLoginActionRef.current = null;
     setShowAuthDialog(false);
     fetchPeek();
   };
@@ -271,7 +295,8 @@ const UserPanel: React.FC<UserPanelProps> = ({
 
   const showSyncControls = !!(onSyncClick || onExportDatabase || onImportDatabase || onReplaceDatabase);
   const localChangeCount = updatedSongCount + updatedProfileCount;
-  const remoteChangeCount = !isGuest && cloudDbVersion !== null ? cloudDbVersion - localDbVersion : 0;
+  const remoteChangeCount = isAuthenticated && cloudDbVersion !== null ? cloudDbVersion - localDbVersion : 0;
+  const showCloudAuthFailed = cloudAuthFailed || (!isGuest && authStatus === "offline");
 
   return (
     <div>
@@ -294,7 +319,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
           <div className="btn-group position-relative user-sync-group mr-2" ref={syncMenuRef}>
             <button className="btn btn-light user-sync-main-btn" aria-label="Sync" title={tt("toolbar_sync")} onClick={onSyncClick}>
               <Icon type={IconType.SYNC} />
-              {localChangeCount && !isGuest ? (
+              {localChangeCount && isAuthenticated ? (
                 <span className="pending-badge-abs sync-version-indicator-topleft" aria-hidden="true">
                   {localChangeCount ? localChangeCount + "↑" : ""}
                 </span>
@@ -313,7 +338,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
             >
               <span className="sync-menu-indicator">▾</span>
             </button>
-            {cloudAuthFailed ? (
+            {showCloudAuthFailed ? (
               <span className="pending-badge-abs cloud-auth-failed" title={t("PleaseLoginAgain")}>
                 <Icon type={IconType.CLOUD_AUTH_FAILED} />
               </span>
@@ -336,7 +361,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
                     </span>
                   ) : null}
                 </button>
-                {onSongCheckClick && !isGuest && (
+                {onSongCheckClick && isAuthenticated && (
                   <button
                     type="button"
                     className="dropdown-item d-flex align-items-center justify-content-between"
@@ -422,6 +447,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
           onConfirm={handleAuthConfirm}
           onCancel={() => {
             pendingActionAfterLoginRef.current = null;
+            deferredPostLoginActionRef.current = null;
             setShowAuthDialog(false);
           }}
           showOffline={true}
