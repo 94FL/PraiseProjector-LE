@@ -605,7 +605,7 @@ export class WebServer {
       const imgid = (req.query.id as string) || "";
 
       // No id param (browser image load via ?c=...): serve actual image data
-      if (!imgid) {
+      if (!imgid && req.query.c) {
         if (this.currentImageData) {
           res.type("image/jpeg").send(this.currentImageData);
         } else {
