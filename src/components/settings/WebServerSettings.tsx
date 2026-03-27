@@ -288,7 +288,9 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
           {/* Left column: Server settings */}
           <div className="col-md-7">
             <div className="form-group">
-              <label htmlFor="serverPort">{t("ServerPort")}</label>
+              <label htmlFor="serverPort" className={settings.iWebEnabled ? "" : "text-muted"}>
+                {t("ServerPort")}
+              </label>
               <input
                 type="number"
                 className="form-control"
@@ -303,7 +305,7 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
               )}
             </div>
             <div className="form-group">
-              <label htmlFor="serverPath">{t("RootPath")}</label>
+              <label htmlFor="serverPath" className={settings.iWebEnabled ? "" : "text-muted"}>{t("RootPath")}</label>
               <div className="input-group">
                 <input
                   type="text"
@@ -320,7 +322,7 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="serverDomain">{t("Domain")}</label>
+              <label htmlFor="serverDomain" className={settings.iWebEnabled ? "" : "text-muted"}>{t("Domain")}</label>
               <div className="d-flex gap-2 align-items-stretch" ref={domainContainerRef}>
                 <div className="flex-grow-1 position-relative">
                   <div className="input-group">
@@ -390,7 +392,7 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="maxResponseTime">{t("MaxResponseTime")}</label>
+              <label htmlFor="maxResponseTime" className={settings.iWebEnabled ? "" : "text-muted"}>{t("MaxResponseTime")}</label>
               <input
                 type="number"
                 className="form-control"
@@ -399,38 +401,9 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
                 onChange={(e) => updateSetting("longPollTimeout", parseInt(e.target.value))}
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="netDisplayJpegQuality">{t("NetDisplayJpegQuality")}</label>
-              <div className="d-flex align-items-center gap-2">
-                <input
-                  type="range"
-                  className="form-range flex-grow-1"
-                  id="netDisplayJpegQuality"
-                  min={1}
-                  max={100}
-                  step={1}
-                  value={Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}
-                  onChange={(e) => updateSetting("netDisplayJpegQuality", parseInt(e.target.value, 10))}
-                />
-                <span className="small text-muted netdisplay-quality-value">{Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}%</span>
-              </div>
-              <small className="form-text text-muted">{t("NetDisplayJpegQualityHelp")}</small>
-            </div>
-            <div className="form-check mt-3">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                id="webServerAcceptLanClientsOnly"
-                checked={settings.webServerAcceptLanClientsOnly}
-                onChange={(e) => updateSetting("webServerAcceptLanClientsOnly", e.target.checked)}
-              />
-              <label className="form-check-label" htmlFor="webServerAcceptLanClientsOnly">
-                {t("WebServerAcceptLanClientsOnly")}
-              </label>
-            </div>
           </div>
-          {/* Right column: QR Code */}
-          <div className="col-md-5 d-flex flex-column align-items-center justify-content-center">
+          {/* Right column: Local server registration and QR Code */}
+          <div className="col-md-5 d-flex flex-column align-items-center justify-content-center qr-code-section">
             {webServerUrl ? (
               <div className="text-center clickable" onClick={() => window.open(webServerUrl, "_blank")}>
                 <div dangerouslySetInnerHTML={{ __html: generateQRCodeSVG(webServerUrl, 160) }} />
@@ -441,7 +414,71 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
                 <small>{t("EnableWebServerToSeeQR")}</small>
               </div>
             )}
+            <br />
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="registerLocalServer"
+                checked={settings.registerLocalServer}
+                onChange={(e) => updateSetting("registerLocalServer", e.target.checked)}
+              />
+              <label className={`form-check-label ${settings.iWebEnabled ? "" : "text-muted"}`} htmlFor="registerLocalServer">
+                {t("RegisterLocalServer")}
+              </label>
+            </div>
           </div>
+        </div>
+
+        <hr />
+
+        <div className="form-group">
+          <label htmlFor="netDisplayJpegQuality" className={settings.iWebEnabled ? "" : "text-muted"}>{t("NetDisplayJpegQuality")}</label>
+          <div className="d-flex align-items-center gap-2">
+            <input
+              type="range"
+              className="form-range flex-grow-1"
+              id="netDisplayJpegQuality"
+              min={1}
+              max={100}
+              step={1}
+              value={Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}
+              onChange={(e) => updateSetting("netDisplayJpegQuality", parseInt(e.target.value, 10))}
+            />
+            <span className="small text-muted netdisplay-quality-value">{Math.max(1, Math.min(100, settings.netDisplayJpegQuality || 70))}%</span>
+          </div>
+          <small className="form-text text-muted">{t("NetDisplayJpegQualityHelp")}</small>
+        </div>
+        <div className="form-group">
+          <label htmlFor="netDisplayImageScale" className={settings.iWebEnabled ? "" : "text-muted"}>{t("NetDisplayImageScale")}</label>
+          <div className="d-flex align-items-center gap-2">
+            <input
+              type="range"
+              className="form-range flex-grow-1"
+              id="netDisplayImageScale"
+              min={10}
+              max={100}
+              step={5}
+              value={Math.round(Math.max(0.1, Math.min(1, settings.netDisplayImageScale || 1)) * 100)}
+              onChange={(e) => updateSetting("netDisplayImageScale", parseInt(e.target.value, 10) / 100)}
+            />
+            <span className="small text-muted netdisplay-quality-value">
+              {Math.round(Math.max(0.1, Math.min(1, settings.netDisplayImageScale || 1)) * 100)}%
+            </span>
+          </div>
+          <small className="form-text text-muted">{t("NetDisplayImageScaleHelp")}</small>
+        </div>
+        <div className="form-check mt-3">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="webServerAcceptLanClientsOnly"
+            checked={settings.webServerAcceptLanClientsOnly}
+            onChange={(e) => updateSetting("webServerAcceptLanClientsOnly", e.target.checked)}
+          />
+          <label className={`form-check-label ${settings.iWebEnabled ? "" : "text-muted"}`} htmlFor="webServerAcceptLanClientsOnly">
+            {t("WebServerAcceptLanClientsOnly")}
+          </label>
         </div>
 
         {/* UFW firewall section — Linux only, shown when UFW is installed */}
@@ -480,32 +517,20 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
         <input
           className="form-check-input"
           type="checkbox"
-          id="registerLocalServer"
-          checked={settings.registerLocalServer}
-          onChange={(e) => updateSetting("registerLocalServer", e.target.checked)}
-        />
-        <label className="form-check-label" htmlFor="registerLocalServer">
-          {t("RegisterLocalServer")}
-        </label>
-      </div>
-      <div className="form-check">
-        <input
-          className="form-check-input"
-          type="checkbox"
           id="allClientsAdmin"
           checked={settings.allClientsCanUseLeaderMode}
           onChange={(e) => updateSetting("allClientsCanUseLeaderMode", e.target.checked)}
         />
-        <label className="form-check-label" htmlFor="allClientsAdmin">
+        <label className={`form-check-label ${settings.iWebEnabled ? "" : "text-muted"}`} htmlFor="allClientsAdmin">
           {t("AllClientsAreAdmins")}
         </label>
       </div>
 
       {/* Leader-mode client list - shown when all-clients-leader-mode is disabled. */}
-      {!settings.allClientsCanUseLeaderMode && (
-        <div className="mt-3">
+      {
+        <div className={`mt-3 ${settings.allClientsCanUseLeaderMode ? "disabled" : ""}`}>
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <label className="form-label mb-0">{t("AdminClients")}</label>
+            <label className={`form-label mb-0 ${settings.iWebEnabled ? "" : "text-muted"}`}>{t("AdminClients")}</label>
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={refreshClients} title={t("Refresh")}>
               <i className="fa fa-refresh"></i>
             </button>
@@ -554,7 +579,7 @@ const WebServerSettings: React.FC<WebServerSettingsProps> = ({ settings, updateS
             )}
           </div>
         </div>
-      )}
+      }
     </div>
   );
 };

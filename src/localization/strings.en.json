@@ -387,6 +387,8 @@
   "MaxResponseTime": "Max Response Time (seconds)",
   "NetDisplayJpegQuality": "Net display JPEG quality",
   "NetDisplayJpegQualityHelp": "Lower values reduce network traffic but also reduce image quality.",
+  "NetDisplayImageScale": "Net display image scale",
+  "NetDisplayImageScaleHelp": "Lower values shrink the image before JPEG encoding to reduce bandwidth.",
   "EnableWebServerToSeeQR": "Enable web server to see QR code",
   "RegisterLocalServer": "Register local server",
   "AllClientsAreAdmins": "All clients are can be leader",

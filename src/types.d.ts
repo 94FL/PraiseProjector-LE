@@ -45,6 +45,7 @@ export interface Settings {
   registerLocalServer: boolean;
   longPollTimeout: number;
   netDisplayJpegQuality: number;
+  netDisplayImageScale: number;
   useSectionColoring: boolean;
   verseSectionColor: string;
   chorusSectionColor: string;

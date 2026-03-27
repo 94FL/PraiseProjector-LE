@@ -87,6 +87,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       registerLocalServer: true, // C# default: True
       longPollTimeout: 120, // C# default: 120, not 30
       netDisplayJpegQuality: 70,
+      netDisplayImageScale: 1,
       useTextSimilarities: true, // C# default: True
 
       // Search settings

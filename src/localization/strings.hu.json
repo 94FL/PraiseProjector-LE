@@ -387,6 +387,8 @@
   "MaxResponseTime": "Max. válaszidő (másodperc)",
   "NetDisplayJpegQuality": "Hálózati kijelző JPEG minőség",
   "NetDisplayJpegQualityHelp": "Alacsonyabb érték csökkenti a hálózati forgalmat, de rontja a képminőséget.",
+  "NetDisplayImageScale": "Hálózati kijelző képméret arány",
+  "NetDisplayImageScaleHelp": "Az alacsonyabb érték JPEG kódolás előtt lekicsinyíti a képet, így csökkenti a sávszélesség igényt.",
   "EnableWebServerToSeeQR": "Engedélyezze a webszervert a QR kód megtekintéséhez",
   "RegisterLocalServer": "Helyi szerver regisztrálása",
   "AllClientsAreAdmins": "Minden kliens lehet vezető",

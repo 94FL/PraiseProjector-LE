@@ -841,6 +841,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const liveQrY = qrDragPos !== null ? qrDragPos.y : (settings?.qrCodeY ?? 82);
     const netDisplayJpegQuality = Math.max(1, Math.min(100, settings?.netDisplayJpegQuality ?? 70));
     const netDisplayJpegQualityFactor = netDisplayJpegQuality / 100;
+    const netDisplayImageScale = Math.max(0.1, Math.min(1, settings?.netDisplayImageScale ?? 1));
 
     // Clamp QR position when size changes so it stays within the image area
     useEffect(() => {
@@ -892,9 +893,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       function doRender() {
         if (!rendererRef.current) return;
 
-        // If message display is enabled, render message instead of section
-        if (displayMessageEnabled) {
-          const messageText = showText ? settings?.message || "" : "";
+        const render = (renderer: SectionRenderer, text: string) => {
           const renderSettings: RenderSettings = {
             fontFamily: settings?.displayFontName || "Arial",
             fontSize: settings?.displayFontSize || 16,
@@ -925,17 +924,34 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
             qrCodeSizePercent: settings?.qrCodeSizePercent,
           };
 
-          updateCurrentDisplay({ message: messageText });
+          updateCurrentDisplay({ message: text });
 
           try {
-            const canvas = rendererRef.current.renderSection(messageText, renderSettings, showImage ? bgImage : null);
+            const canvas = renderer.renderSection(text, renderSettings, showImage ? bgImage : null);
             setPreviewDataUrl(canvas.toDataURL("image/png"));
-            setNetDisplayDataUrl(canvas.toDataURL("image/jpeg", netDisplayJpegQualityFactor));
+            let netDisplayCanvas = canvas;
+            if (netDisplayImageScale < 1) {
+              netDisplayCanvas = document.createElement("canvas");
+              netDisplayCanvas.width = canvas.width * netDisplayImageScale;
+              netDisplayCanvas.height = canvas.height * netDisplayImageScale;
+              const ctx = netDisplayCanvas.getContext("2d");
+              if (ctx) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, netDisplayCanvas.width, netDisplayCanvas.height);
+              }
+            }
+            setNetDisplayDataUrl(netDisplayCanvas.toDataURL("image/jpeg", netDisplayJpegQualityFactor));
           } catch (error) {
             console.error("Preview", "Error rendering message", error);
             setPreviewDataUrl(null);
             setNetDisplayDataUrl(null);
           }
+        };
+
+        // If message display is enabled, render message instead of section
+        if (displayMessageEnabled) {
+          const messageText = showText ? settings?.message || "" : "";
+          render(rendererRef.current, messageText);
           return;
         }
 
@@ -948,47 +964,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
 
         const section = sections[selectedSectionIndex];
         const sectionText = showText ? section.text : "";
-        const renderSettings: RenderSettings = {
-          fontFamily: settings?.displayFontName || "Arial",
-          fontSize: settings?.displayFontSize || 16,
-          bold: settings?.displayFontBold ?? false,
-          italic: settings?.displayFontItalic ?? false,
-          underline: settings?.displayFontUnderline ?? false,
-          alignment: settings?.displayFontAlign || "center",
-          textColor: settings?.textColor || "#FFFFFF",
-          bgColor: settings?.backgroundColor || "#000000",
-          textBorderColor: settings?.textBorderColor || "#000000",
-          textBorderWidth: settings?.textBorderWidth || 0,
-          textShadowEnabled: settings?.displayTextShadowEnabled ?? false,
-          textShadowOffset: settings?.displayTextShadowOffset ?? 2,
-          textShadowBlur: settings?.displayTextShadowBlur ?? 4,
-          textShadowColor: settings?.displayTextShadowColor || "#000000",
-          textShadowOpacity: settings?.displayTextShadowOpacity ?? 0.8,
-          renderWidth: projectorWidth,
-          renderHeight: projectorHeight,
-          marginLeft: settings?.displayBorderRect?.left || 0,
-          marginRight: settings?.displayBorderRect?.width || 0,
-          marginTop: settings?.displayBorderRect?.top || 0,
-          marginBottom: settings?.displayBorderRect?.height || 0,
-          backgroundImageFit: settings?.backgroundImageFit || "touchInner",
-          checkSectionsProjectable: settings?.checkSectionsProjectable || false,
-          qrCodeUrl: qrCodeUrl,
-          qrCodeX: liveQrX,
-          qrCodeY: liveQrY,
-          qrCodeSizePercent: settings?.qrCodeSizePercent,
-        };
-
-        updateCurrentDisplay({ message: sectionText });
-
-        try {
-          const canvas = rendererRef.current.renderSection(sectionText, renderSettings, showImage ? bgImage : null);
-          setPreviewDataUrl(canvas.toDataURL("image/png"));
-          setNetDisplayDataUrl(canvas.toDataURL("image/jpeg", netDisplayJpegQualityFactor));
-        } catch (error) {
-          console.error("Preview", "Error rendering section", error);
-          setPreviewDataUrl(null);
-          setNetDisplayDataUrl(null);
-        }
+        render(rendererRef.current, sectionText);
       }
 
       doRender();
@@ -1005,6 +981,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       projectorHeight,
       qrCodeUrl,
       netDisplayJpegQualityFactor,
+      netDisplayImageScale,
       isQrDragging,
       qrDragPos,
       liveQrX,
