@@ -1,6 +1,7 @@
 import React from "react";
 import { Settings } from "../../types";
 import { useLocalization } from "../../localization/LocalizationContext";
+import { generateQRCodeSVG } from "../../hooks/useSessionUrl";
 import "./ProjectingSettings.css";
 
 const MAX_MARGIN_SUM = 95;
@@ -25,40 +26,101 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
     startTop: number;
     startBottomMargin: number;
   } | null>(null);
+  const [isQrDragging, setIsQrDragging] = React.useState(false);
+  const [marginPreviewSize, setMarginPreviewSize] = React.useState({ width: 0, height: 0 });
+  const qrDragRef = React.useRef({ startX: 0, startY: 0, startQrX: 0, startQrY: 0 });
+  const marginPreviewQrRef = React.useRef<HTMLDivElement | null>(null);
 
   const clampMarginValue = (value: number, oppositeValue: number) => {
     const normalizedValue = Number.isFinite(value) ? value : 0;
     return Math.max(0, Math.min(MAX_MARGIN_SUM - oppositeValue, Math.round(normalizedValue)));
   };
 
-  const updateDisplayMargin = (side: MarginSide, nextValue: number) => {
-    const currentRect = settings.displayBorderRect;
+  const updateDisplayMargin = React.useCallback(
+    (side: MarginSide, nextValue: number) => {
+      const currentRect = settings.displayBorderRect;
 
-    switch (side) {
-      case "top":
-        updateSetting("displayBorderRect", {
-          ...currentRect,
-          top: clampMarginValue(nextValue, currentRect.height),
-        });
-        return;
-      case "bottom":
-        updateSetting("displayBorderRect", {
-          ...currentRect,
-          height: clampMarginValue(nextValue, currentRect.top),
-        });
-        return;
-      case "left":
-        updateSetting("displayBorderRect", {
-          ...currentRect,
-          left: clampMarginValue(nextValue, currentRect.width),
-        });
-        return;
-      case "right":
-        updateSetting("displayBorderRect", {
-          ...currentRect,
-          width: clampMarginValue(nextValue, currentRect.left),
-        });
+      switch (side) {
+        case "top":
+          updateSetting("displayBorderRect", {
+            ...currentRect,
+            top: clampMarginValue(nextValue, currentRect.height),
+          });
+          return;
+        case "bottom":
+          updateSetting("displayBorderRect", {
+            ...currentRect,
+            height: clampMarginValue(nextValue, currentRect.top),
+          });
+          return;
+        case "left":
+          updateSetting("displayBorderRect", {
+            ...currentRect,
+            left: clampMarginValue(nextValue, currentRect.width),
+          });
+          return;
+        case "right":
+          updateSetting("displayBorderRect", {
+            ...currentRect,
+            width: clampMarginValue(nextValue, currentRect.left),
+          });
+      }
+    },
+    [settings.displayBorderRect, updateSetting]
+  );
+
+  const clampQrPosition = React.useCallback(
+    (x: number, y: number, sizePercent: number) => {
+      const width = marginPreviewSize.width;
+      const height = marginPreviewSize.height;
+
+      if (width <= 0 || height <= 0) {
+        return {
+          x: Math.max(0, Math.min(100, x)),
+          y: Math.max(0, Math.min(100, y)),
+        };
+      }
+
+      const qrSizePx = height * (sizePercent / 100);
+      const maxX = Math.max(0, 100 - (qrSizePx / width) * 100);
+      const maxY = Math.max(0, 100 - (qrSizePx / height) * 100);
+
+      return {
+        x: Math.max(0, Math.min(maxX, x)),
+        y: Math.max(0, Math.min(maxY, y)),
+      };
+    },
+    [marginPreviewSize.height, marginPreviewSize.width]
+  );
+
+  const updateQrSize = React.useCallback(
+    (nextSize: number) => {
+      const normalizedSize = Math.max(1, Math.min(100, Math.round(nextSize)));
+      const clamped = clampQrPosition(settings.qrCodeX, settings.qrCodeY, normalizedSize);
+
+      updateSetting("qrCodeSizePercent", normalizedSize);
+      if (Math.abs(clamped.x - settings.qrCodeX) > 0.01) {
+        updateSetting("qrCodeX", clamped.x);
+      }
+      if (Math.abs(clamped.y - settings.qrCodeY) > 0.01) {
+        updateSetting("qrCodeY", clamped.y);
+      }
+    },
+    [clampQrPosition, settings.qrCodeX, settings.qrCodeY, updateSetting]
+  );
+
+  const updateQrAxis = (axis: "x" | "y", rawValue: number) => {
+    const numericValue = Number.isFinite(rawValue) ? rawValue : 0;
+    const currentSize = settings.qrCodeSizePercent ?? 15;
+    const currentX = settings.qrCodeX ?? 85;
+    const currentY = settings.qrCodeY ?? 82;
+    const clamped = clampQrPosition(axis === "x" ? numericValue : currentX, axis === "y" ? numericValue : currentY, currentSize);
+
+    if (axis === "x") {
+      updateSetting("qrCodeX", Math.round(clamped.x));
+      return;
     }
+    updateSetting("qrCodeY", Math.round(clamped.y));
   };
 
   const handleMarginInputChange = (side: MarginSide) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,6 +143,57 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
       startTop: settings.displayBorderRect.top,
       startBottomMargin: settings.displayBorderRect.height,
     });
+  };
+
+  const startQrDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !settings.qrCodeInPreview) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    qrDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startQrX: settings.qrCodeX ?? 85,
+      startQrY: settings.qrCodeY ?? 82,
+    };
+    setIsQrDragging(true);
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const preview = marginPreviewRef.current;
+      if (!preview || !preview.offsetWidth || !preview.offsetHeight) {
+        return;
+      }
+
+      const dx = ((event.clientX - qrDragRef.current.startX) / preview.offsetWidth) * 100;
+      const dy = ((event.clientY - qrDragRef.current.startY) / preview.offsetHeight) * 100;
+      const clamped = clampQrPosition(qrDragRef.current.startQrX + dx, qrDragRef.current.startQrY + dy, settings.qrCodeSizePercent ?? 15);
+
+      updateSetting("qrCodeX", clamped.x);
+      updateSetting("qrCodeY", clamped.y);
+    };
+
+    const handlePointerUp = () => {
+      setIsQrDragging(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  const handleQrWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!settings.qrCodeInPreview) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -2 : 2;
+    updateQrSize((settings.qrCodeSizePercent ?? 15) + delta);
   };
 
   React.useEffect(() => {
@@ -120,7 +233,7 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [draggingMarginSide, settings.displayBorderRect]);
+  }, [draggingMarginSide, settings.displayBorderRect, updateDisplayMargin]);
 
   React.useEffect(() => {
     if (!draggingBox) {
@@ -172,6 +285,68 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
     marginPreviewInnerRef.current.style.bottom = `${settings.displayBorderRect.height}%`;
   }, [settings.displayBorderRect]);
 
+  React.useEffect(() => {
+    const preview = marginPreviewRef.current;
+    if (!preview) {
+      return undefined;
+    }
+
+    const updateSize = () => {
+      setMarginPreviewSize({ width: preview.offsetWidth, height: preview.offsetHeight });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+    observer.observe(preview);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const qrSizePx = marginPreviewSize.height > 0 ? marginPreviewSize.height * ((settings.qrCodeSizePercent ?? 15) / 100) : 0;
+  const qrLeftPx = marginPreviewSize.width > 0 ? marginPreviewSize.width * ((settings.qrCodeX ?? 85) / 100) : 0;
+  const qrTopPx = marginPreviewSize.height > 0 ? marginPreviewSize.height * ((settings.qrCodeY ?? 82) / 100) : 0;
+  const qrPreviewUrl = "https://praiseprojector.local/display";
+
+  React.useEffect(() => {
+    const qrEl = marginPreviewQrRef.current;
+    if (!qrEl || !settings.qrCodeInPreview) {
+      return;
+    }
+    qrEl.style.left = `${qrLeftPx}px`;
+    qrEl.style.top = `${qrTopPx}px`;
+    qrEl.style.width = `${qrSizePx}px`;
+    qrEl.style.height = `${qrSizePx}px`;
+  }, [qrLeftPx, qrSizePx, qrTopPx, settings.qrCodeInPreview]);
+
+  React.useEffect(() => {
+    const qrEl = marginPreviewQrRef.current;
+    if (!qrEl) {
+      return undefined;
+    }
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      if (!settings.qrCodeInPreview) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      const delta = event.deltaY > 0 ? -2 : 2;
+      updateQrSize((settings.qrCodeSizePercent ?? 15) + delta);
+    };
+
+    qrEl.addEventListener("wheel", handleNativeWheel, { passive: false, capture: true });
+
+    return () => {
+      qrEl.removeEventListener("wheel", handleNativeWheel, true);
+    };
+  }, [settings.qrCodeInPreview, settings.qrCodeSizePercent, updateQrSize]);
+
   return (
     <div className="container-fluid general-settings-root">
       <div className="row">
@@ -216,7 +391,7 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
         <div className="col-md-6 general-settings-right-col">
           <div className="border p-2 margin-fieldset">
             <div className="margin-editor">
-              <div className="margin-title">{t("SettingsMargins")}</div>
+              <div className="margin-title">{t("SettingsLayout")}</div>
               <div className="margin-input-top margin-input">
                 <label htmlFor="marginTop">{t("SettingsMarginTop")}</label>
                 <input
@@ -254,6 +429,17 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
                   <div className="margin-drag-handle margin-drag-handle-left" onPointerDown={startMarginDrag("left")} />
                   <span className="margin-preview-text">Hallelujah!</span>
                 </div>
+                {settings.qrCodeInPreview && (
+                  <div
+                    ref={marginPreviewQrRef}
+                    className={`margin-preview-qrcode${isQrDragging ? " is-dragging" : ""}`}
+                    onPointerDown={startQrDrag}
+                    onWheel={handleQrWheel}
+                    title={t("SettingsQRCodePreviewHelp")}
+                  >
+                    <div dangerouslySetInnerHTML={{ __html: generateQRCodeSVG(qrPreviewUrl, Math.max(16, Math.round(qrSizePx))) }} />
+                  </div>
+                )}
               </div>
 
               <div className="margin-input-right margin-input">
@@ -286,6 +472,82 @@ const ProjectingSettings: React.FC<ProjectingSettingsProps> = ({ settings, updat
           </div>
         </div>
         <div className="col-12">
+          <hr />
+          <div className="form-check mt-1">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="qrCodeInPreview"
+              checked={settings.qrCodeInPreview}
+              onChange={(e) => updateSetting("qrCodeInPreview", e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="qrCodeInPreview">
+              {t("SettingsQRCodeVisible")}
+            </label>
+          </div>
+          {settings.qrCodeInPreview && (
+            <div className="shadow-controls mt-3 ps-4 border-start border-2 border-secondary">
+              <div className="row g-2 mt-1 qr-settings-inputs">
+                <div className="col-12">
+                  <label className="form-label mb-1" htmlFor="qrCodeSizeSlider">
+                    {t("SettingsQRCodeSize")}
+                  </label>
+                  <input
+                    id="qrCodeSizeSlider"
+                    type="range"
+                    className="form-range"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={settings.qrCodeSizePercent}
+                    aria-label={t("SettingsQRCodeSize")}
+                    onChange={(e) => updateQrSize(parseInt(e.target.value || "0", 10))}
+                  />
+                  <small className="text-muted d-block mt-1">
+                    {t("SettingsQRCodeSizeHelp")} ({Math.round(settings.qrCodeSizePercent)}%)
+                  </small>
+                </div>
+                <div className="col-12">
+                  <label className="form-label mb-1" htmlFor="qrCodeXSlider">
+                    {t("SettingsQRCodeX")}
+                  </label>
+                  <input
+                    id="qrCodeXSlider"
+                    type="range"
+                    className="form-range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={settings.qrCodeX}
+                    onChange={(e) => updateQrAxis("x", parseInt(e.target.value || "0", 10))}
+                  />
+                  <small className="text-muted d-block mt-1">
+                    {t("SettingsQRCodeXPositionHelp")} ({Math.round(settings.qrCodeX)}%)
+                  </small>
+                </div>
+
+                <div className="col-12">
+                  <label className="form-label mb-1" htmlFor="qrCodeYSlider">
+                    {t("SettingsQRCodeY")}
+                  </label>
+                  <input
+                    id="qrCodeYSlider"
+                    type="range"
+                    className="form-range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={settings.qrCodeY}
+                    onChange={(e) => updateQrAxis("y", parseInt(e.target.value || "0", 10))}
+                  />
+                  <small className="text-muted d-block mt-1">
+                    {t("SettingsQRCodeYPositionHelp")} ({Math.round(settings.qrCodeY)}%)
+                  </small>
+                </div>
+              </div>
+              <div className="small text-muted mt-1">{t("SettingsQRCodePreviewHelp")}</div>
+            </div>
+          )}
           <div className="form-group mt-3 shadow-settings-group">
             <div className="form-check">
               <input

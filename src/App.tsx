@@ -1926,7 +1926,7 @@ const AppContent: React.FC = () => {
                 {t("TabEditor")}
               </button>
               <button className={`btn ${activePanel === "preview" ? "btn-primary" : "btn-secondary"}`} onClick={() => setActivePanel("preview")}>
-                {t("TabPreview")}
+                {t("TabProjection")}
               </button>
             </div>
             <div className="flex-grow-1 min-height-0">

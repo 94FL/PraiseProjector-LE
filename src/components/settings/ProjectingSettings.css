@@ -80,6 +80,35 @@
   user-select: none;
 }
 
+.margin-preview-qrcode {
+  position: absolute;
+  z-index: 3;
+  cursor: grab;
+  background: #ffffff;
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.margin-preview-qrcode:hover {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+.margin-preview-qrcode.is-dragging,
+.margin-preview-qrcode:active {
+  cursor: grabbing;
+}
+
+.margin-preview-qrcode svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .margin-drag-handle {
   position: absolute;
   z-index: 1;
@@ -160,6 +189,15 @@
 
 .margin-fieldset {
   border-radius: 4px;
+}
+
+.qr-settings-fieldset {
+  border-radius: 4px;
+}
+
+.qr-settings-title {
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 
 /* Two-column projecting layout (md+) */

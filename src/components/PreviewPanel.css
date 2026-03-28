@@ -159,11 +159,6 @@
   position: relative;
 }
 
-/* Remote control indicator - matching C# SectionListBox.Remote with smartphone-tablet background image */
-.preview-sections-container.remote-controlled {
-  /* Container needs position relative for the overlay */
-}
-
 .remote-indicator-overlay {
   position: absolute;
   top: 0;
@@ -397,6 +392,34 @@
   flex: 1;
   word-wrap: break-word;
   white-space: pre-wrap;
+}
+
+.section-text-preview {
+  font-family: var(--section-preview-font-family, Arial);
+}
+
+.section-text-bold {
+  font-weight: bold;
+}
+
+.section-text-italic {
+  font-style: italic;
+}
+
+.section-text-underline {
+  text-decoration: underline;
+}
+
+.section-text-align-left {
+  text-align: left;
+}
+
+.section-text-align-center {
+  text-align: center;
+}
+
+.section-text-align-right {
+  text-align: right;
 }
 
 /* Button column layout matching C# (top-aligned and bottom-aligned groups) */

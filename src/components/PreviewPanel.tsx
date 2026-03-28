@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
 import { generateQRCodeSVG } from "../hooks/useSessionUrl";
 import "./PreviewPanel.css";
 import { PlaylistEntry } from "../classes/PlaylistEntry";
@@ -12,7 +12,6 @@ import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useTooltips } from "../localization/TooltipContext";
 import { MonitorDisplay } from "../types/electron";
-import { useAuth } from "../contexts/AuthContext";
 import ImageSelector from "./preview/ImageSelector";
 import { Settings } from "../types";
 import { useLeader } from "../contexts/LeaderContext";
@@ -64,6 +63,21 @@ interface ExtendedSectionItem extends SectionItem {
   displayMode: SectionDisplayMode;
 }
 
+interface ScreenInfo {
+  left: number;
+  top: number;
+  availWidth: number;
+  availHeight: number;
+}
+
+interface ScreenDetailsResult {
+  screens?: ScreenInfo[];
+}
+
+interface WindowWithScreenDetails extends Window {
+  getScreenDetails?: () => Promise<ScreenDetailsResult>;
+}
+
 const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
   (
     {
@@ -89,7 +103,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const { showMessage } = useMessageBox();
     const { t } = useLocalization();
     const { tt } = useTooltips();
-    const { isAuthenticated } = useAuth();
     const [activeTab, setActiveTab] = useState<PreviewTab>(initialTab);
     const [sections, setSections] = useState<ExtendedSectionItem[]>([]);
     const [nextSectionIndex, setNextSectionIndex] = useState(-1);
@@ -266,12 +279,20 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const [isQrDragging, setIsQrDragging] = useState(false);
     const qrDragRef = useRef({ startClientX: 0, startClientY: 0, startQrX: 0, startQrY: 0, moved: false });
     const qrPinchRef = useRef({ startDist: 0, startSizePercent: 0 });
+    const suppressQrClickRef = useRef(false);
+    const suppressNextWrapperClickRef = useRef(false);
+    const qrOverlayRef = useRef<HTMLDivElement | null>(null);
+    const fontColorSwatchRef = useRef<HTMLSpanElement | null>(null);
     // Throttle ref for QR-interaction canvas re-renders (max once per 100ms)
     const lastQrRenderRef = useRef(0);
 
     // QR size context menu state
     const [qrContextMenu, setQrContextMenu] = useState<{ x: number; y: number } | null>(null);
     const qrContextMenuRef = useRef<HTMLDivElement | null>(null);
+
+    const openQrContextMenuAt = useCallback((x: number, y: number) => {
+      setQrContextMenu({ x, y });
+    }, []);
 
     // Available fonts for the font picker
     const [availableFonts, setAvailableFonts] = useState<string[]>(["Arial", "Times New Roman", "Verdana", "Georgia", "Courier New"]);
@@ -399,7 +420,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           instructions: selectedPlaylistItem?.instructions,
         });
       },
-      [selectedPlaylistItem, settings?.externalWebDisplayEnabled, settings?.selectedLeader, isAuthenticated]
+      [selectedPlaylistItem]
     );
 
     // Helper function to get next checked section index (matching C# GetNextOf logic)
@@ -856,7 +877,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       const clampedY = Math.max(0, Math.min(maxY, currentY));
       if (Math.abs(clampedX - currentX) > 0.01) updateSettingWithAutoSave("qrCodeX", clampedX);
       if (Math.abs(clampedY - currentY) > 0.01) updateSettingWithAutoSave("qrCodeY", clampedY);
-    }, [settings?.qrCodeSizePercent, settings?.qrCodeX, settings?.qrCodeY, projectorWidth, projectorHeight, updateSettingWithAutoSave]);
+    }, [settings, settings?.qrCodeSizePercent, settings?.qrCodeX, settings?.qrCodeY, projectorWidth, projectorHeight, updateSettingWithAutoSave]);
 
     // Render preview when selected section or settings change
     useEffect(() => {
@@ -1003,13 +1024,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         // Helper to check if index is valid for next selection
         const isValidNextIndex = (i: number) => i >= 0 && i < sections.length && i !== selectedSectionIndex && sections[i].checked;
 
-        // Helper to ensure item is visible
-        const ensureVisible = (index: number) => {
-          if (index >= 0 && sectionRefs.current[index]) {
-            sectionRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          }
-        };
-
         switch (e.key) {
           case "ArrowDown":
           case "ArrowRight": {
@@ -1119,7 +1133,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           }
         }
       },
-      [sections, selectedSectionIndex, nextSectionIndex, getNextCheckedIndex, toggleSectionCheck, updateDisplayState]
+      [sections, selectedSectionIndex, nextSectionIndex, getNextCheckedIndex, toggleSectionCheck, updateDisplayState, onSelectedSectionIndexChange]
     );
 
     const handleCheckboxClick = (e: React.MouseEvent, index: number) => {
@@ -1228,12 +1242,13 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           // Request window-management permission (needed for cross-screen window.open placement).
           // getScreenDetails() triggers the permission prompt and, once granted, unlocks
           // cross-screen coordinates in window.open() and moveTo()/resizeTo().
-          let screenDetails: any = null;
+          let screenDetails: ScreenDetailsResult | null = null;
           try {
-            if ("getScreenDetails" in window) {
-              screenDetails = await (window as any).getScreenDetails();
+            const windowWithScreenDetails = window as WindowWithScreenDetails;
+            if (typeof windowWithScreenDetails.getScreenDetails === "function") {
+              screenDetails = await windowWithScreenDetails.getScreenDetails();
             }
-          } catch (_) {
+          } catch {
             /* permission denied or unsupported — fall back to single screen */
           }
 
@@ -1274,7 +1289,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                 }
               }
             }
-          } catch (_) {
+          } catch {
             /* ignore corrupt data */
           }
 
@@ -1294,7 +1309,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
             try {
               projWindow.moveTo(left, top);
               projWindow.resizeTo(width, height);
-            } catch (_) {
+            } catch {
               /* best effort */
             }
           }
@@ -1383,7 +1398,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                     onChange={(e) => updateSettingWithAutoSave("displayFontName", e.target.value)}
                   >
                     {availableFonts.map((font) => (
-                      <option key={font} value={font} style={{ fontFamily: font }}>
+                      <option key={font} value={font}>
                         {font}
                       </option>
                     ))}
@@ -1426,7 +1441,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       </option>
                     ))}
                   </select>
-                  <button className="btn btn-light font-color-btn" title={tt("format_text_color")}>
+                  <label className="btn btn-light font-color-btn" title={tt("format_text_color")}>
                     <input
                       type="color"
                       className="font-color-picker-hidden"
@@ -1435,8 +1450,8 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       title={tt("format_text_color")}
                       aria-label="Text Color"
                     />
-                    <span className="font-color-swatch" style={{ backgroundColor: settings?.textColor || "#FFFFFF" }} />
-                  </button>
+                    <span className="font-color-swatch" ref={fontColorSwatchRef} />
+                  </label>
                   <div className="btn-group align-buttons">
                     <button
                       className={`btn flex-fill ${(settings?.displayFontAlign || "center") === "left" ? "btn-light btn-active" : "btn-light"}`}
@@ -1505,6 +1520,14 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
 
     // Click on the preview background: toggle QR visibility
     const handlePreviewWrapperClick = useCallback(() => {
+      if (suppressNextWrapperClickRef.current) {
+        suppressNextWrapperClickRef.current = false;
+        return;
+      }
+      if (qrContextMenu) {
+        setQrContextMenu(null);
+        return;
+      }
       if (qrRawUrl) {
         const nextVisible = !(settings?.qrCodeInPreview ?? false);
         updateSettingWithAutoSave("qrCodeInPreview", nextVisible);
@@ -1513,7 +1536,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           setQrDragPos(null);
         }
       }
-    }, [settings?.qrCodeInPreview, qrRawUrl, updateSettingWithAutoSave]);
+    }, [settings?.qrCodeInPreview, qrRawUrl, qrContextMenu, updateSettingWithAutoSave]);
 
     // Context menu on the projected image preview → show QR size slider (only when QR is visible)
     const handlePreviewContextMenu = useCallback(
@@ -1532,6 +1555,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       if (!qrContextMenu) return;
       const handleClickOutside = (e: MouseEvent) => {
         if (qrContextMenuRef.current && !qrContextMenuRef.current.contains(e.target as Node)) {
+          suppressNextWrapperClickRef.current = true;
           setQrContextMenu(null);
         }
       };
@@ -1545,6 +1569,12 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         document.removeEventListener("keydown", handleKeyDown);
       };
     }, [qrContextMenu]);
+
+    useEffect(() => {
+      if (!settings?.qrCodeInPreview && qrContextMenu) {
+        setQrContextMenu(null);
+      }
+    }, [settings?.qrCodeInPreview, qrContextMenu]);
 
     // Mouse drag on the QR overlay (left button only)
     const handleQrMouseDown = useCallback(
@@ -1580,15 +1610,18 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           setQrDragPos({ x: newX, y: newY });
         };
 
-        const handleMouseUp = () => {
+        const handleMouseUp = (me: MouseEvent) => {
           document.removeEventListener("mousemove", handleMouseMove);
           document.removeEventListener("mouseup", handleMouseUp);
           setIsQrDragging(false);
           if (!qrDragRef.current.moved) {
-            // Short click → hide QR
             setQrDragPos(null);
-            updateSettingWithAutoSave("qrCodeInPreview", false);
+            openQrContextMenuAt(me.clientX, me.clientY);
           } else {
+            suppressQrClickRef.current = true;
+            window.setTimeout(() => {
+              suppressQrClickRef.current = false;
+            }, 0);
             // Drag ended → persist new position
             setQrDragPos((pos) => {
               if (pos) {
@@ -1603,7 +1636,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         document.addEventListener("mousemove", handleMouseMove);
         document.addEventListener("mouseup", handleMouseUp);
       },
-      [settings, updateSettingWithAutoSave]
+      [settings, openQrContextMenuAt, updateSettingWithAutoSave]
     );
 
     // Scroll wheel on the QR overlay → resize
@@ -1612,7 +1645,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         e.preventDefault();
         e.stopPropagation();
         if (!settings) return;
-        const delta = e.deltaY > 0 ? -1 : 1;
+        const delta = e.deltaY > 0 ? -2 : 2;
         const current = settings.qrCodeSizePercent ?? 15;
         const next = Math.max(1, Math.min(100, current + delta));
         if (next !== current) updateSettingWithAutoSave("qrCodeSizePercent", next);
@@ -1687,9 +1720,12 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         e.stopPropagation();
         if (isQrDragging) {
           setIsQrDragging(false);
+          const touch = e.changedTouches[0];
           if (!qrDragRef.current.moved) {
             setQrDragPos(null);
-            updateSettingWithAutoSave("qrCodeInPreview", false);
+            if (touch) {
+              openQrContextMenuAt(touch.clientX, touch.clientY);
+            }
           } else {
             setQrDragPos((pos) => {
               if (pos) {
@@ -1701,7 +1737,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           }
         }
       },
-      [isQrDragging, updateSettingWithAutoSave]
+      [isQrDragging, openQrContextMenuAt, updateSettingWithAutoSave]
     );
 
     // Compute pixel position/size for the QR overlay
@@ -1709,6 +1745,60 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const qrSizePx = wrapperDims.h > 0 ? wrapperDims.h * (qrSizePercent / 100) : 0;
     const qrLeftPx = wrapperDims.w > 0 ? wrapperDims.w * (liveQrX / 100) : 0;
     const qrTopPx = wrapperDims.h > 0 ? wrapperDims.h * (liveQrY / 100) : 0;
+
+    useEffect(() => {
+      const wrapper = previewWrapperRef.current;
+      if (!wrapper) {
+        return;
+      }
+
+      if (imageDims.w > 0 && imageDims.h > 0) {
+        wrapper.style.width = `${imageDims.w}px`;
+        wrapper.style.height = `${imageDims.h}px`;
+      } else {
+        wrapper.style.removeProperty("width");
+        wrapper.style.removeProperty("height");
+      }
+    }, [imageDims.h, imageDims.w, previewDataUrl]);
+
+    useEffect(() => {
+      const overlay = qrOverlayRef.current;
+      if (!overlay) {
+        return;
+      }
+
+      overlay.style.setProperty("--qr-left", `${qrLeftPx}px`);
+      overlay.style.setProperty("--qr-top", `${qrTopPx}px`);
+      overlay.style.setProperty("--qr-size", `${qrSizePx}px`);
+    }, [qrLeftPx, qrTopPx, qrSizePx]);
+
+    useEffect(() => {
+      const menu = qrContextMenuRef.current;
+      if (!menu || !qrContextMenu) {
+        return;
+      }
+
+      menu.style.left = `${qrContextMenu.x}px`;
+      menu.style.top = `${qrContextMenu.y}px`;
+    }, [qrContextMenu]);
+
+    useEffect(() => {
+      const swatch = fontColorSwatchRef.current;
+      if (!swatch) {
+        return;
+      }
+
+      swatch.style.backgroundColor = settings?.textColor || "#FFFFFF";
+    }, [settings?.textColor]);
+
+    useEffect(() => {
+      const sectionList = sectionListRef.current;
+      if (!sectionList) {
+        return;
+      }
+
+      sectionList.style.setProperty("--section-preview-font-family", settings?.displayFontName || "Arial");
+    }, [settings?.displayFontName]);
 
     return (
       <div className="d-flex flex-column h-100" ref={panelGroupRef}>
@@ -1747,15 +1837,15 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                       // Match C# SectionListBox.PreviewFont and Format properties logic
                       // C# line 134-143: PreviewFont uses display font with format button states
                       // C# line 148-158: Format includes StringFormat with alignment (line 2387-2399)
-                      const sectionTextStyle = settings?.previewFontInSections
-                        ? {
-                            fontFamily: settings.displayFontName || "Arial",
-                            fontWeight: settings?.displayFontBold ? "bold" : "normal",
-                            fontStyle: settings?.displayFontItalic ? "italic" : "normal",
-                            textDecoration: settings?.displayFontUnderline ? "underline" : "none",
-                            textAlign: settings.displayFontAlign || "center",
-                          }
-                        : {};
+                      const sectionTextClassName = `section-text${
+                        settings?.previewFontInSections
+                          ? ` section-text-preview section-text-align-${settings.displayFontAlign || "center"}${
+                              settings?.displayFontBold ? " section-text-bold" : ""
+                            }${settings?.displayFontItalic ? " section-text-italic" : ""}${
+                              settings?.displayFontUnderline ? " section-text-underline" : ""
+                            }`
+                          : ""
+                      }`;
 
                       return (
                         <div
@@ -1779,9 +1869,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                               aria-label={`Include section ${index + 1}`}
                             />
                             {}
-                            <span className="section-text" style={sectionTextStyle}>
-                              {displayText}
-                            </span>
+                            <span className={sectionTextClassName}>{displayText}</span>
                           </div>
                         </div>
                       );
@@ -1916,7 +2004,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                   <div
                     ref={previewWrapperRef}
                     className="preview-image-wrapper"
-                    style={imageDims.w > 0 && imageDims.h > 0 ? { width: imageDims.w, height: imageDims.h } : undefined}
                     onClick={handlePreviewWrapperClick}
                     onContextMenu={handlePreviewContextMenu}
                     title={!settings?.qrCodeInPreview && qrRawUrl ? tt("preview_no_qrcode") : undefined}
@@ -1924,11 +2011,16 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                     <img src={previewDataUrl} alt="Section Preview" className="preview-display-image" />
                     {settings?.qrCodeInPreview && qrCodeUrl && (
                       <div
+                        ref={qrOverlayRef}
                         className={`qr-code-overlay${isQrDragging ? " dragging" : ""}`}
-                        style={{ "--qr-left": `${qrLeftPx}px`, "--qr-top": `${qrTopPx}px`, "--qr-size": `${qrSizePx}px` } as React.CSSProperties}
                         onClick={(e) => {
                           // Keep overlay interactions from triggering wrapper toggle.
                           e.stopPropagation();
+                          if (suppressQrClickRef.current) {
+                            return;
+                          }
+                          const bounds = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          openQrContextMenuAt(bounds.left + bounds.width / 2, bounds.bottom + 8);
                         }}
                         onMouseDown={handleQrMouseDown}
                         onWheel={handleQrWheel}
@@ -1946,7 +2038,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
                   <div className="preview-display-placeholder">{t("SelectSectionToPreview")}</div>
                 )}
                 {qrContextMenu && (
-                  <div ref={qrContextMenuRef} className="qr-context-menu" style={{ left: qrContextMenu.x, top: qrContextMenu.y }}>
+                  <div ref={qrContextMenuRef} className="qr-context-menu">
                     <label htmlFor="qr-size-slider" className="qr-context-menu-label">
                       {t("QRCodeSizeSettingLabel")}: {Math.round(settings?.qrCodeSizePercent ?? 15)}%
                     </label>
