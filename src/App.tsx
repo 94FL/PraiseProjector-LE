@@ -1090,43 +1090,36 @@ const AppContent: React.FC = () => {
 
   // Called before entering edit mode - check if sync is needed (matching C# Editor_EnterEditMode)
   const handleBeforeEnterEditMode = useCallback(async (): Promise<boolean> => {
-    if (remoteChangeCount <= 0) {
+    if (remoteChangeCount <= 0 || isGuest) {
       return true;
     }
 
-    // Check if more than 1 hour has passed since last sync (matching C# TimeSpan(1, 0, 0))
-    if (isAuthenticated && settings?.lastSyncDate) {
-      const lastSync = new Date(settings.lastSyncDate);
-      const now = new Date();
-      const oneHourInMs = 60 * 60 * 1000;
-      if (now.getTime() - lastSync.getTime() > oneHourInMs) {
-        const syncDeclineTimeoutMinutes = Math.max(0, settings?.syncDeclineTimeoutMinutes ?? 15);
-        const syncDeclineCooldownMs = syncDeclineTimeoutMinutes * 60 * 1000;
-        if (syncDeclineCooldownMs > 0 && syncDeclinedAtRef.current !== null && now.getTime() - syncDeclinedAtRef.current < syncDeclineCooldownMs) {
-          return true;
-        }
-        // Ask user if they want to sync before editing
-        return new Promise((resolve) => {
-          showConfirm(
-            t("OldSyncWarning"),
-            t("AskOldSync"),
-            () => {
-              // User chose to sync - open sync dialog
-              setShowDBSync(true);
-              // Don't enter edit mode immediately - user can click edit again after sync
-              resolve(false);
-            },
-            () => {
-              // User chose not to sync - proceed with edit mode
-              syncDeclinedAtRef.current = Date.now();
-              resolve(true);
-            },
-            { confirmText: t("SyncNow") }
-          );
-        });
-      }
+    const now = Date.now();
+    const syncDeclineTimeoutMinutes = Math.max(0, settings?.syncDeclineTimeoutMinutes ?? 15);
+    const syncDeclineCooldownMs = syncDeclineTimeoutMinutes * 60 * 1000;
+    if (syncDeclineCooldownMs > 0 && syncDeclinedAtRef.current !== null && now - syncDeclinedAtRef.current < syncDeclineCooldownMs) {
+      return true;
     }
-    return true;
+
+    // Cloud is ahead of local db version, ask before entering edit mode.
+    return new Promise((resolve) => {
+      showConfirm(
+        t("OldSyncWarning"),
+        t("AskOldSync"),
+        () => {
+          // User chose to sync - open sync dialog
+          setShowDBSync(true);
+          // Don't enter edit mode immediately - user can click edit again after sync
+          resolve(false);
+        },
+        () => {
+          // User chose not to sync - proceed with edit mode
+          syncDeclinedAtRef.current = Date.now();
+          resolve(true);
+        },
+        { confirmText: t("SyncNow") }
+      );
+    });
   }, [isAuthenticated, remoteChangeCount, settings?.lastSyncDate, settings?.syncDeclineTimeoutMinutes, showConfirm, t]);
 
   // Called after leaving edit mode with changed text - prompt to save (matching C# Editor_LeaveEditMode)
