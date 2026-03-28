@@ -1770,7 +1770,7 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       overlay.style.setProperty("--qr-left", `${qrLeftPx}px`);
       overlay.style.setProperty("--qr-top", `${qrTopPx}px`);
       overlay.style.setProperty("--qr-size", `${qrSizePx}px`);
-    }, [qrLeftPx, qrTopPx, qrSizePx]);
+    }, [qrLeftPx, qrTopPx, qrSizePx, qrCodeUrl, settings?.qrCodeInPreview, previewDataUrl]);
 
     useEffect(() => {
       const menu = qrContextMenuRef.current;
