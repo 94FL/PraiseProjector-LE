@@ -139,7 +139,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       leaderProfileUpdateMode: "allSources", // Allow profile updates from all sources by default
       showPreferredOnly: false, // Don't filter by preferred by default
       // QR Code settings
-      qrCodeInPreview: true, // Show QR code in preview by default
+      qrCodeInPreview: false, // Show QR code in preview by default
       qrCodeX: 85, // QR code X position (% of image width)
       qrCodeY: 82, // QR code Y position (% of image height)
       qrCodeSizePercent: 15, // QR code size (% of image height)
