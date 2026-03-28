@@ -228,6 +228,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       storeApi
         .saveSettings(newSettings)
         .then(() => {
+          // Keep cancel baseline aligned with the latest persisted settings.
+          setInitialSettings(newSettings);
           // Dispatch custom event to notify components
           window.dispatchEvent(new CustomEvent("pp-settings-changed"));
           // Sync to backend after auto-save
