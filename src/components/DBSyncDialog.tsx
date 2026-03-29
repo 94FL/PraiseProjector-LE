@@ -1071,17 +1071,20 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
         const mergedClone = mergedLeader.clone();
         mergedClone.version = 0;
 
+        const backupLeader = updatedLeadersWithBackups.find((entry) => entry.leader.id === leaderId)?.backup.leader;
+
+        // Always prioritize backup equality: if merged == backup then local edits are effectively reverted.
+        if (backupLeader && mergedClone.equals(backupLeader)) {
+          handleUpdatedLeaderDecision(leaderId, "revert");
+          pendingMergedLeadersRef.current.delete(leaderId);
+          setUpdatedLeaderCompare(null);
+          return;
+        }
+
         if (compareType === "backup") {
-          // Comparing with backup: if merged equals backup → revert
-          const backupLeader = otherLeader;
-          if (mergedClone.equals(backupLeader)) {
-            handleUpdatedLeaderDecision(leaderId, "revert");
-            pendingMergedLeadersRef.current.delete(leaderId);
-          } else {
-            // Merged differs from backup → upload the merged version
-            pendingMergedLeadersRef.current.set(leaderId, mergedClone);
-            handleUpdatedLeaderDecision(leaderId, "upload");
-          }
+          // Backup compare and not equal to backup -> upload merged changes.
+          pendingMergedLeadersRef.current.set(leaderId, mergedClone);
+          handleUpdatedLeaderDecision(leaderId, "upload");
         } else {
           // Comparing with server: if merged equals server → no need to upload
           // (server already has this version, higher version will be downloaded during sync)
@@ -1099,7 +1102,7 @@ const DBSyncDialog: React.FC<DBSyncDialogProps> = ({
       }
       setUpdatedLeaderCompare(null);
     },
-    [updatedLeaderCompare, handleUpdatedLeaderDecision]
+    [updatedLeaderCompare, updatedLeadersWithBackups, handleUpdatedLeaderDecision]
   );
 
   // Compare with backup: left=backup, right=local updated
