@@ -205,8 +205,151 @@ export function imageApp(url: string) {
   apps.push(app);
   let startupImageId: string | undefined = "startup";
   let inited = false;
+  let imageLayers: [HTMLImageElement, HTMLImageElement] | undefined;
+  let activeLayerIndex = 0;
+  let currentImageId: string | undefined;
+  let loadingImageId: string | undefined;
+  let loadSequence = 0;
+  let clearTimer: number | undefined;
+  let transitionMs = 200;
+  let transitionType = "linear";
+
+  const applyNetDisplaySettings = (bgColor?: string) => {
+    if (!document.body) return;
+    document.body.style.backgroundColor = bgColor && bgColor.trim() ? bgColor : "black";
+  };
+
+  const ensureLayers = () => {
+    if (imageLayers || !document.body) return;
+
+    const createLayer = (zIndex: number, opacity: string) => {
+      const img = document.createElement("img");
+      img.style.position = "fixed";
+      img.style.left = "0";
+      img.style.top = "0";
+      img.style.width = "100vw";
+      img.style.height = "100vh";
+      img.style.objectFit = "contain";
+      img.style.objectPosition = "center center";
+      img.style.pointerEvents = "none";
+      img.style.userSelect = "none";
+      img.style.zIndex = zIndex.toString();
+      img.style.opacity = opacity;
+      img.style.transition = "opacity 200ms linear";
+      return img;
+    };
+
+    const front = createLayer(1, "1");
+    const back = createLayer(0, "0");
+    document.body.appendChild(front);
+    document.body.appendChild(back);
+    imageLayers = [front, back];
+  };
+
+  const clampTransitionMs = (value: unknown) => {
+    if (typeof value === "boolean") return value ? 500 : 0;
+    if (typeof value !== "number" || !Number.isFinite(value)) return 200;
+    return Math.max(0, Math.min(500, Math.round(value)));
+  };
+
+  const setLayerTransition = (ms: number, type: string = "linear") => {
+    if (!imageLayers) return;
+    const transition = ms <= 0 ? "none" : `opacity ${ms}ms ${type}`;
+    imageLayers[0].style.transition = transition;
+    imageLayers[1].style.transition = transition;
+  };
+
+  const cancelClear = () => {
+    if (clearTimer !== undefined) {
+      clearTimeout(clearTimer);
+      clearTimer = undefined;
+    }
+  };
+
+  const clearImagesNow = () => {
+    if (!imageLayers) return;
+    ++loadSequence;
+    currentImageId = undefined;
+    loadingImageId = undefined;
+    imageLayers[0].removeAttribute("src");
+    imageLayers[1].removeAttribute("src");
+    imageLayers[0].style.opacity = "0";
+    imageLayers[1].style.opacity = "0";
+  };
+
+  const clearWithTransition = (ms: number) => {
+    if (!imageLayers) return;
+    if (clearTimer !== undefined) return;
+    setLayerTransition(ms, transitionType);
+    const active = imageLayers[activeLayerIndex];
+    const inactive = imageLayers[1 - activeLayerIndex];
+    active.style.opacity = "0";
+    inactive.style.opacity = "0";
+    if (ms <= 0) {
+      clearImagesNow();
+      return;
+    }
+    clearTimer = window.setTimeout(() => {
+      clearTimer = undefined;
+      clearImagesNow();
+    }, ms);
+  };
+
+  const loadIntoBackLayerAndSwap = (imageId: string) => {
+    if (imageId === currentImageId || imageId === loadingImageId) return;
+    ensureLayers();
+    if (!imageLayers) return;
+
+    const backLayerIndex = 1 - activeLayerIndex;
+    const backLayer = imageLayers[backLayerIndex];
+    const frontLayer = imageLayers[activeLayerIndex];
+
+    const nextUrl = url + "image?c=" + encodeURIComponent(imageId);
+    const sequence = ++loadSequence;
+    loadingImageId = imageId;
+    cancelClear();
+    setLayerTransition(transitionMs, transitionType);
+    backLayer.style.opacity = "0";
+    backLayer.style.zIndex = "2";
+
+    backLayer.onload = () => {
+      if (sequence !== loadSequence || loadingImageId !== imageId) return;
+
+      if (transitionMs <= 0) {
+        backLayer.style.transition = "none";
+        frontLayer.style.transition = "none";
+        backLayer.style.opacity = "1";
+        frontLayer.style.opacity = "0";
+        backLayer.style.zIndex = "1";
+        frontLayer.style.zIndex = "0";
+      } else {
+        requestAnimationFrame(() => {
+          backLayer.style.opacity = "1";
+          frontLayer.style.opacity = "0";
+        });
+        window.setTimeout(() => {
+          if (sequence !== loadSequence || loadingImageId !== undefined) return;
+          backLayer.style.zIndex = "1";
+          frontLayer.style.zIndex = "0";
+        }, transitionMs);
+      }
+
+      activeLayerIndex = backLayerIndex;
+      currentImageId = imageId;
+      loadingImageId = undefined;
+    };
+    backLayer.onerror = () => {
+      if (sequence !== loadSequence || loadingImageId !== imageId) return;
+      loadingImageId = undefined;
+      console.log("Cannot preload image: " + imageId);
+    };
+    backLayer.src = nextUrl;
+  };
+
   const init = () => {
     if (!inited && document.body) {
+      applyNetDisplaySettings();
+      ensureLayers();
       doubleClickHelper(document.body, () => {
         location.href = url;
       });
@@ -214,19 +357,25 @@ export function imageApp(url: string) {
     }
   };
   const requestImage = () => {
-    app.requestImage(
-      (id) => {
-        document.body.style.backgroundImage = id && id !== "NULL" ? "url(" + url + "image?c=" + encodeURIComponent(id) + ")" : "";
+    app
+      .requestImage(startupImageId)
+      .then((netDisplayData) => {
+        applyNetDisplaySettings(netDisplayData.bgColor);
+        transitionMs = clampTransitionMs(netDisplayData.transient);
+        transitionType = (netDisplayData.transitionType as string) ?? "linear";
+        if (netDisplayData.id) {
+          loadIntoBackLayerAndSwap(netDisplayData.id);
+        } else if (imageLayers) {
+          clearWithTransition(transitionMs);
+        }
         setTimeout(requestImage, 100);
         init();
-      },
-      (error) => {
+      })
+      .catch((error) => {
         console.log("Cannot load image: " + error);
         setTimeout(requestImage, 10000);
         init();
-      },
-      startupImageId
-    );
+      });
     startupImageId = undefined;
   };
   requestImage();

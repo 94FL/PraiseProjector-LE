@@ -69,8 +69,12 @@ export interface Settings {
   externalWebDisplayEnabled: boolean;
   registerLocalServer: boolean;
   longPollTimeout: number;
+  netDisplayResolution: string; // "640x480" | "854x480" | "1280x720" | "1920x1080" | "3840x2160"
+  netDisplayTransitionType: string; // "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out"
+  netDisplayUseJpegCompression: boolean;
   netDisplayJpegQuality: number;
   netDisplayImageScale: number;
+  netDisplayTransient: number;
 
   useSectionColoring: boolean;
   verseSectionColor: string;

@@ -5,6 +5,7 @@ import SearchingSettings from "./settings/SearchingSettings";
 import LeadersSettings from "./settings/LeadersSettings";
 import SectionsSettings from "./settings/SectionsSettings";
 import WebServerSettings from "./settings/WebServerSettings";
+import NetDisplaySettings from "./settings/NetDisplaySettings";
 import ImagesSettings from "./settings/ImagesSettings";
 import AboutSettings from "./settings/AboutSettings";
 import { Leader } from "../classes";
@@ -35,7 +36,7 @@ function normalizeSettingsTab(tab: string | undefined): string {
     "leaders",
     "sections",
     "about",
-    ...(window.electronAPI ? ["webserver"] : []),
+    ...(window.electronAPI ? ["webserver", "netdisplay"] : []),
   ]);
   if (tab && validTabs.has(tab)) {
     return tab;
@@ -260,6 +261,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
       sections: <SectionsSettings settings={settings} updateSetting={updateSetting} />,
       images: <ImagesSettings settings={settings} updateSetting={updateSetting} />,
       webserver: <WebServerSettings settings={settings} updateSetting={updateSetting} />,
+      netdisplay: <NetDisplaySettings settings={settings} updateSetting={updateSetting} />,
       about: <AboutSettings />,
     };
 
@@ -330,6 +332,13 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
               <li className="nav-item">
                 <a className={`nav-link ${activeTab === "webserver" ? "active" : ""}`} href="#" onClick={() => setActiveTab("webserver")}>
                   {t("SettingsPageWebServer")}
+                </a>
+              </li>
+            )}
+            {!!window.electronAPI && (
+              <li className="nav-item">
+                <a className={`nav-link ${activeTab === "netdisplay" ? "active" : ""}`} href="#" onClick={() => setActiveTab("netdisplay")}>
+                  {t("SettingsPageNetDisplay")}
                 </a>
               </li>
             )}

@@ -1,0 +1,64 @@
+.net-display-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.net-display-transition-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.net-display-transition-type-btn {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.4rem;
+  background: var(--bs-body-bg, #fff);
+  color: var(--bs-body-color, #212529);
+  padding: 0.4rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.net-display-transition-type-btn:hover:not(:disabled) {
+  border-color: var(--bs-primary, #0d6efd);
+}
+
+.net-display-transition-type-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.net-display-transition-type-btn.selected {
+  border-color: var(--bs-primary, #0d6efd);
+  background: color-mix(in srgb, var(--bs-primary, #0d6efd) 8%, var(--bs-body-bg, #fff));
+}
+
+.net-display-transition-type-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.net-display-transition-type-icon {
+  width: 100%;
+  height: 32px;
+}
+
+.net-display-transition-type-icon .axis {
+  stroke: color-mix(in srgb, var(--bs-body-color, #212529) 40%, transparent);
+  stroke-width: 1;
+}
+
+.net-display-transition-type-icon .curve {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}

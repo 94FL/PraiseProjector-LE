@@ -51,8 +51,12 @@ export interface Settings {
   externalWebDisplayEnabled: boolean;
   registerLocalServer: boolean;
   longPollTimeout: number;
+  netDisplayResolution: string;
+  netDisplayTransitionType: string;
+  netDisplayUseJpegCompression: boolean;
   netDisplayJpegQuality: number;
   netDisplayImageScale: number;
+  netDisplayTransient: number;
   useSectionColoring: boolean;
   verseSectionColor: string;
   chorusSectionColor: string;

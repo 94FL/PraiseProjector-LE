@@ -150,3 +150,36 @@ export function subscribeCurrentDisplayChange(listener: (display: Display) => vo
   displayListeners.set(handler, referenceDisplay ? cloneDisplay(referenceDisplay) : undefined);
   return () => displayListeners.delete(handler);
 }
+
+// Projector render dimensions — the actual pixel size of the canvas being rendered
+// (real monitor size when projector is open, netDisplayResolution size when not)
+let projectorRenderDims: { width: number; height: number } = { width: 1920, height: 1080 };
+const projectorRenderListeners = new Set<Listener>();
+
+function emitProjectorRenderDims() {
+  for (const listener of projectorRenderListeners) {
+    listener();
+  }
+}
+
+export function setProjectorRenderDims(width: number, height: number): void {
+  if (projectorRenderDims.width !== width || projectorRenderDims.height !== height) {
+    projectorRenderDims = { width, height };
+    emitProjectorRenderDims();
+  }
+}
+
+export function getProjectorRenderDims(): { width: number; height: number } {
+  return projectorRenderDims;
+}
+
+export function useProjectorRenderDims(): { width: number; height: number } {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      projectorRenderListeners.add(onStoreChange);
+      return () => projectorRenderListeners.delete(onStoreChange);
+    },
+    () => projectorRenderDims,
+    () => projectorRenderDims
+  );
+}

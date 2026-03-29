@@ -28,8 +28,9 @@ import {
   songsResponseCodec,
   syncResponseCodec,
   editSongResponseCodec,
+  netDisplayDataCodec,
 } from "./pp-codecs";
-import type { SongHistoryEntry } from "./pp-types";
+import type { NetDisplayData, SongHistoryEntry } from "./pp-types";
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1000;
@@ -800,8 +801,9 @@ export class CloudApiService {
   }
 
   /** Fetch image by ID. Returns the image identifier/data returned by the server */
-  async fetchImage(id: string): Promise<string> {
-    return this.apiCall<string>(`/image?id=${encodeURIComponent(id)}`);
+  async fetchImage(id: string): Promise<NetDisplayData> {
+    const result = await this.apiCall<unknown>(`/image?id=${encodeURIComponent(id)}`);
+    return this.parseResponse(netDisplayDataCodec, result);
   }
 
   /** Request or verify highlight permission. Returns "GRANTED", "NOPE", or leader name */

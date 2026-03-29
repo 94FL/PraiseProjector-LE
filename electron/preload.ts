@@ -58,7 +58,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Internal Electron display window update (lossless frame)
-  setDisplayWindowImage: (imageDataUrl: string | null, options?: { jpegQuality?: number; imageScale?: number }) => {
+  setDisplayWindowImage: (
+    imageDataUrl: string | null,
+    options?: { jpegQuality?: number; imageScale?: number; bgColor?: string; transient?: number }
+  ) => {
     ipcRenderer.send("set-display-window-image", imageDataUrl, options);
   },
 

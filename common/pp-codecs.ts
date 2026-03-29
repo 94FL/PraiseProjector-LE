@@ -69,6 +69,19 @@ export const preferenceTypeCodec = new t.Type<PreferenceType | undefined, string
   t.identity
 );
 
+/** Transition duration in milliseconds for net display crossfade (0..500). */
+export const transitionMsCodec = new t.Type<number, number, unknown>(
+  "TransitionMs",
+  (u): u is number => typeof u === "number" && Number.isFinite(u) && u >= 0 && u <= 500,
+  (u, c) => {
+    // Backward compatibility with legacy boolean payloads.
+    if (typeof u === "boolean") return t.success(u ? 500 : 0);
+    if (typeof u !== "number" || !Number.isFinite(u)) return t.failure(u, c);
+    return t.success(Math.max(0, Math.min(500, Math.round(u))));
+  },
+  t.identity
+);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Song setting & preference
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -176,6 +189,21 @@ export const displayCodec = uniType(
     version: t.number,
     instructions: t.string,
     message: t.string,
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Netdisplay data
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const netDisplayDataCodec = uniType(
+  {
+    id: t.string,
+  },
+  {
+    transient: transitionMsCodec,
+    transitionType: t.string,
+    bgColor: t.string,
   }
 );
 

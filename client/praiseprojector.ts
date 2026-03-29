@@ -4609,14 +4609,10 @@ export class App extends AppBase {
     }
   }
 
-  public requestImage(resultCallback: ResultCallback, errorCallback: ErrorCallback, forcedImageId?: string) {
-    cloudApi
-      .fetchImage(forcedImageId ?? this.lastImageId)
-      .then((id) => {
-        this.lastImageId = id;
-        resultCallback(id, {});
-      })
-      .catch((error) => errorCallback(error instanceof Error ? error : new Error(String(error))));
+  public async requestImage(forcedImageId?: string) {
+    const response = await cloudApi.fetchImage(forcedImageId ?? this.lastImageId);
+    this.lastImageId = response.id;
+    return response;
   }
 
   public genChordSheets(

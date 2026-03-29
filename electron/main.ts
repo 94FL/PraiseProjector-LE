@@ -62,13 +62,17 @@ app.on("second-instance", () => {
 let powerSaveBlockerId: number | null = null;
 
 type NetDisplayEncodeSettings = {
-  jpegQuality: number;
+  jpegQuality?: number;
   imageScale: number;
+  bgColor: string;
+  transient: number;
 };
 
 const netDisplayEncodeSettings: NetDisplayEncodeSettings = {
   jpegQuality: 70,
   imageScale: 1,
+  bgColor: "#000000",
+  transient: 200,
 };
 
 let lastNetDisplaySourceImageDataUrl: string | null = null;
@@ -78,19 +82,34 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function updateNetDisplayEncodeSettings(settings: Settings): boolean {
-  const nextJpegQuality = clamp(Math.round(settings.netDisplayJpegQuality ?? 70), 1, 100);
+  const nextJpegQuality =
+    (settings.netDisplayUseJpegCompression ?? true) ? clamp(Math.round(settings.netDisplayJpegQuality ?? 70), 1, 100) : undefined;
   const nextImageScale = clamp(settings.netDisplayImageScale ?? 1, 0.1, 1);
-  const changed = nextJpegQuality !== netDisplayEncodeSettings.jpegQuality || nextImageScale !== netDisplayEncodeSettings.imageScale;
+  const nextBgColor = settings.backgroundColor || "#000000";
+  const nextTransient =
+    typeof settings.netDisplayTransient === "boolean"
+      ? settings.netDisplayTransient
+        ? 500
+        : 0
+      : clamp(Math.round(settings.netDisplayTransient ?? 200), 0, 500);
+  const changed =
+    nextJpegQuality !== netDisplayEncodeSettings.jpegQuality ||
+    nextImageScale !== netDisplayEncodeSettings.imageScale ||
+    nextBgColor !== netDisplayEncodeSettings.bgColor ||
+    nextTransient !== netDisplayEncodeSettings.transient;
   netDisplayEncodeSettings.jpegQuality = nextJpegQuality;
   netDisplayEncodeSettings.imageScale = nextImageScale;
+  netDisplayEncodeSettings.bgColor = nextBgColor;
+  netDisplayEncodeSettings.transient = nextTransient;
   return changed;
 }
 
-function encodeNetDisplayBase64(imageDataUrl: string | null): string | null {
-  if (!imageDataUrl) return null;
+function encodeNetDisplayImage(imageDataUrl: string | null): { data: string | null; mimeType: "image/jpeg" | "image/png" } {
+  const mimeType = netDisplayEncodeSettings.jpegQuality == null ? "image/png" : "image/jpeg";
+  if (!imageDataUrl) return { data: null, mimeType };
   try {
     let image = nativeImage.createFromDataURL(imageDataUrl);
-    if (image.isEmpty()) return null;
+    if (image.isEmpty()) return { data: null, mimeType };
 
     const scale = netDisplayEncodeSettings.imageScale;
     if (scale < 1) {
@@ -100,11 +119,14 @@ function encodeNetDisplayBase64(imageDataUrl: string | null): string | null {
       image = image.resize({ width, height, quality: "best" });
     }
 
-    const jpegBuffer = image.toJPEG(netDisplayEncodeSettings.jpegQuality);
-    return jpegBuffer.toString("base64");
+    if (netDisplayEncodeSettings.jpegQuality == null) {
+      return { data: image.toPNG().toString("base64"), mimeType };
+    }
+
+    return { data: image.toJPEG(netDisplayEncodeSettings.jpegQuality).toString("base64"), mimeType };
   } catch (error) {
     console.error("[Main] Failed to encode net display image", error);
-    return null;
+    return { data: null, mimeType };
   }
 }
 
@@ -857,8 +879,13 @@ ipcMain.on("sync-settings", (_event, settings: Settings) => {
     });
 
     // Re-encode and republish the latest net display frame when encode settings change.
-    if (netDisplayEncodeChanged && lastNetDisplaySourceImageDataUrl) {
-      webServer.setImage(encodeNetDisplayBase64(lastNetDisplaySourceImageDataUrl));
+    if (netDisplayEncodeChanged) {
+      const encoded = encodeNetDisplayImage(lastNetDisplaySourceImageDataUrl);
+      webServer.setImage(encoded.data, {
+        mimeType: encoded.mimeType,
+        bgColor: netDisplayEncodeSettings.bgColor,
+        transient: netDisplayEncodeSettings.transient,
+      });
     }
   }
 
@@ -893,21 +920,33 @@ function updateDisplayWindowImage(pngDataUrl: string | null): void {
 }
 
 // Internal Electron display window image update (lossless frame)
-ipcMain.on("set-display-window-image", (_event, imageDataUrl: string | null, options?: { jpegQuality?: number; imageScale?: number }) => {
-  if (options) {
-    if (typeof options.jpegQuality === "number") {
-      netDisplayEncodeSettings.jpegQuality = clamp(Math.round(options.jpegQuality), 1, 100);
+ipcMain.on(
+  "set-display-window-image",
+  (_event, imageDataUrl: string | null, options?: { jpegQuality?: number; imageScale?: number; bgColor?: string; transient?: number }) => {
+    if (options) {
+      if (typeof options.imageScale === "number") {
+        netDisplayEncodeSettings.imageScale = clamp(options.imageScale, 0.1, 1);
+      }
+      netDisplayEncodeSettings.jpegQuality = typeof options.jpegQuality === "number" ? clamp(Math.round(options.jpegQuality), 1, 100) : undefined;
+      if (typeof options.bgColor === "string" && options.bgColor.trim() !== "") {
+        netDisplayEncodeSettings.bgColor = options.bgColor;
+      }
+      if (typeof options.transient === "number" && Number.isFinite(options.transient)) {
+        netDisplayEncodeSettings.transient = clamp(Math.round(options.transient), 0, 500);
+      }
     }
-    if (typeof options.imageScale === "number") {
-      netDisplayEncodeSettings.imageScale = clamp(options.imageScale, 0.1, 1);
-    }
+
+    lastNetDisplaySourceImageDataUrl = imageDataUrl;
+
+    updateDisplayWindowImage(imageDataUrl);
+    const encoded = encodeNetDisplayImage(imageDataUrl);
+    getWebServerInstance()?.setImage(encoded.data, {
+      mimeType: encoded.mimeType,
+      bgColor: netDisplayEncodeSettings.bgColor,
+      transient: netDisplayEncodeSettings.transient,
+    });
   }
-
-  lastNetDisplaySourceImageDataUrl = imageDataUrl;
-
-  updateDisplayWindowImage(imageDataUrl);
-  getWebServerInstance()?.setImage(encodeNetDisplayBase64(imageDataUrl));
-});
+);
 
 // Sync leader name (for UDP offer - C# uses cmbLeader.Text which is the name, not ID)
 ipcMain.on("sync-leader-name", (_event, leaderName: string) => {

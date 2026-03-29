@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
-import { Display } from "../common/pp-types";
+import { Display, NetDisplayData } from "../common/pp-types";
 import { compareDisplays, deserializePlaylist } from "../common/pp-utils";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import { app, ipcMain } from "electron";
+import { app, ipcMain, Net } from "electron";
 import { Server } from "http";
 import { getMachineIpAddress } from "./utils";
 import { flushAllDisplayChangeListeners, getCurrentDisplay, waitForDisplayChange } from "./display";
@@ -83,6 +83,9 @@ export class WebServer {
   private imagePageContent: string = "";
   private currentImageData: Buffer | null = null;
   private currentImageId: string = "";
+  private currentImageMimeType: "image/jpeg" | "image/png" = "image/jpeg";
+  private currentImageBgColor: string = "#000000";
+  private currentImageTransient: number = 200;
   private pendingImageRequests: Array<{ res: express.Response; imgid: string; timeout: NodeJS.Timeout }> = [];
   private macCache: Map<string, { mac: string; validTo: number }> = new Map();
   private leaderTokens: Map<string, string> = new Map(); // token UUID → client IP
@@ -605,7 +608,7 @@ export class WebServer {
       // No id param (browser image load via ?c=...): serve actual image data
       if (req.query.c) {
         if (this.currentImageData) {
-          res.type("image/jpeg").send(this.currentImageData);
+          res.type(this.currentImageMimeType).send(this.currentImageData);
         } else {
           res.status(404).send("No image available");
         }
@@ -616,7 +619,7 @@ export class WebServer {
 
       // If client's id doesn't match current: respond immediately with new id
       if (imgid !== this.currentImageId) {
-        res.json(this.currentImageId);
+        res.json(this.getNetDisplayResponse());
         return;
       }
 
@@ -624,7 +627,7 @@ export class WebServer {
       const timeoutMs = (this.settings.longPollTimeout || 30) * 1000;
       const timeout = setTimeout(() => {
         this.removePendingImageRequest(res);
-        res.json(this.currentImageId);
+        res.json(this.getNetDisplayResponse());
       }, timeoutMs);
 
       this.pendingImageRequests.push({ res, imgid, timeout });
@@ -1115,7 +1118,13 @@ export class WebServer {
    * Called from IPC when the frontend renders a new display frame.
    * @param imageDataUrl - data URL (data:image/jpeg;base64,..., data:image/png;base64,...) or raw base64 string
    */
-  public setImage(imageDataUrl: string | null): void {
+  public setImage(imageDataUrl: string | null, options?: { mimeType?: "image/jpeg" | "image/png"; bgColor?: string; transient?: number }): void {
+    if (options?.mimeType) this.currentImageMimeType = options.mimeType;
+    if (typeof options?.bgColor === "string" && options.bgColor.trim() !== "") this.currentImageBgColor = options.bgColor;
+    if (typeof options?.transient === "number" && Number.isFinite(options.transient)) {
+      this.currentImageTransient = Math.max(0, Math.min(500, Math.round(options.transient)));
+    }
+
     if (!imageDataUrl) {
       this.currentImageData = null;
       this.currentImageId = "";
@@ -1140,12 +1149,20 @@ export class WebServer {
     for (const pending of this.pendingImageRequests) {
       clearTimeout(pending.timeout);
       try {
-        pending.res.json(this.currentImageId);
+        pending.res.json(this.getNetDisplayResponse());
       } catch {
         // Client may have disconnected
       }
     }
     this.pendingImageRequests = [];
+  }
+
+  private getNetDisplayResponse(): NetDisplayData {
+    return {
+      id: this.currentImageId,
+      bgColor: this.currentImageBgColor,
+      transient: this.currentImageTransient,
+    };
   }
 
   private removePendingImageRequest(res: express.Response): void {

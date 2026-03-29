@@ -44,6 +44,7 @@ import {
   sessionRequestCodec,
   editSongRequestCodec,
   suggestRequestCodec,
+  netDisplayDataCodec,
 } from "./pp-codecs";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -119,6 +120,12 @@ export type LeadersResponse = t.TypeOf<typeof leadersResponseCodec>;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type Display = t.TypeOf<typeof displayCodec>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Netdisplay data
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type NetDisplayData = t.TypeOf<typeof netDisplayDataCodec>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Session / host types

@@ -7,7 +7,7 @@ import { SectionGenerator, SectionItem, DisplaySettings } from "../utils/Section
 import { SectionRenderer, RenderSettings } from "../utils/SectionRenderer";
 import { useSettings } from "../hooks/useSettings";
 import { Icon, IconType } from "../services/IconService";
-import { getProjectedSong, useProjectedSong, updateCurrentDisplay } from "../state/CurrentSongStore";
+import { getProjectedSong, useProjectedSong, updateCurrentDisplay, setProjectorRenderDims } from "../state/CurrentSongStore";
 import { useMessageBox } from "../contexts/MessageBoxContext";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useTooltips } from "../localization/TooltipContext";
@@ -80,6 +80,18 @@ interface WindowWithScreenDetails extends Window {
 }
 
 const remoteIndicatorOverlaySrc = `${import.meta.env.BASE_URL}assets/smartphone-tablet.png`;
+
+const NET_DISPLAY_RESOLUTION_MAP: Record<string, [number, number]> = {
+  "640x480": [640, 480],
+  "854x480": [854, 480],
+  "1280x720": [1280, 720],
+  "1920x1080": [1920, 1080],
+  "3840x2160": [3840, 2160],
+};
+
+function getNetDisplayDimensions(preset?: string | null): [number, number] {
+  return NET_DISPLAY_RESOLUTION_MAP[preset ?? "1920x1080"] ?? [1920, 1080];
+}
 
 const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
   (
@@ -169,6 +181,20 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     const [_displayAspectRatio, setDisplayAspectRatio] = useState(16 / 9); // Default aspect ratio
     const [projectorWidth, setProjectorWidth] = useState(1920);
     const [projectorHeight, setProjectorHeight] = useState(1080);
+
+    // When no projector window is open, render at the user-configured net display resolution
+    useEffect(() => {
+      if (projectorEnabled) return;
+      const [w, h] = getNetDisplayDimensions(settings?.netDisplayResolution);
+      setProjectorWidth(w);
+      setProjectorHeight(h);
+      setDisplayAspectRatio(w / h);
+    }, [settings?.netDisplayResolution, projectorEnabled]);
+
+    // Publish render dimensions to the global store so other components (e.g. settings) can read them
+    useEffect(() => {
+      setProjectorRenderDims(projectorWidth, projectorHeight);
+    }, [projectorWidth, projectorHeight]);
 
     // Preview canvas state
     const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
@@ -862,8 +888,15 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     // Live QR position: prefer drag position, fall back to persisted settings
     const liveQrX = qrDragPos !== null ? qrDragPos.x : (settings?.qrCodeX ?? 85);
     const liveQrY = qrDragPos !== null ? qrDragPos.y : (settings?.qrCodeY ?? 82);
+    const netDisplayUseJpegCompression = settings?.netDisplayUseJpegCompression ?? true;
     const netDisplayJpegQuality = Math.max(1, Math.min(100, settings?.netDisplayJpegQuality ?? 70));
     const netDisplayImageScale = Math.max(0.1, Math.min(1, settings?.netDisplayImageScale ?? 1));
+    const netDisplayTransient =
+      typeof settings?.netDisplayTransient === "boolean"
+        ? settings.netDisplayTransient
+          ? 500
+          : 0
+        : Math.max(0, Math.min(500, Math.round(settings?.netDisplayTransient ?? 200)));
     // Clamp QR position when size changes so it stays within the image area
     useEffect(() => {
       if (!settings) return;
@@ -1376,10 +1409,21 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       }
       // Send frame once; main process updates both display window and net display clients.
       window.electronAPI?.setDisplayWindowImage?.(previewDataUrl, {
-        jpegQuality: netDisplayJpegQuality,
+        jpegQuality: netDisplayUseJpegCompression ? netDisplayJpegQuality : undefined,
         imageScale: netDisplayImageScale,
+        bgColor: settings?.backgroundColor || "#000000",
+        transient: netDisplayTransient,
       });
-    }, [previewDataUrl, projectorWindowRef, projectorEnabled, netDisplayJpegQuality, netDisplayImageScale]);
+    }, [
+      previewDataUrl,
+      projectorWindowRef,
+      projectorEnabled,
+      netDisplayUseJpegCompression,
+      netDisplayJpegQuality,
+      netDisplayImageScale,
+      netDisplayTransient,
+      settings?.backgroundColor,
+    ]);
 
     // Note: We intentionally do NOT close the projector window on unmount
     // because the PreviewPanel can be conditionally rendered (paging mode vs 3-panel mode)

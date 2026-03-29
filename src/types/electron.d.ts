@@ -79,7 +79,10 @@ export interface IElectronAPI {
   syncLeaderName?: (leaderName: string) => void;
 
   // Internal Electron display window update (lossless frame)
-  setDisplayWindowImage?: (imageDataUrl: string | null, options?: { jpegQuality?: number; imageScale?: number }) => void;
+  setDisplayWindowImage?: (
+    imageDataUrl: string | null,
+    options?: { jpegQuality?: number; imageScale?: number; bgColor?: string; transient?: number }
+  ) => void;
 
   // Get connected clients from webserver (for leader-mode client selection)
   getConnectedClients?: () => Promise<Array<{ id: string; deviceName: string; isLeaderModeClient: boolean }>>;
