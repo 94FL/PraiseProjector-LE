@@ -21,11 +21,11 @@ As a result, the code is by no means 'pretty' or elegant or well designed; howev
 
 ## Requirements
 
-- Node.js 20+ (recommended)
+- Node.js 22.12.0+ (recommended)
 
 ## Installation
 
-1. **Install Node.js** (version 20 or higher) from [nodejs.org](https://nodejs.org/)
+1. **Install Node.js** (version 22.12.0 or higher) from [nodejs.org](https://nodejs.org/)
 
 2. **Clone or download** this project
 
