@@ -8,7 +8,7 @@ import { P2PSessionInfo } from "../types/electron.d";
 import { webBluetoothService } from "../services/webBluetooth";
 import "./SessionsForm.css";
 import { useLeader } from "../contexts/LeaderContext";
-import { useSessionUrl, buildCloudUrl, generateQRCodeSVG } from "../hooks/useSessionUrl";
+import { useSessionUrl, buildCloudUrl, generateQRCodeSVG, buildLocalUrl } from "../hooks/useSessionUrl";
 
 interface SessionsFormProps {
   onClose: () => void;
@@ -323,7 +323,7 @@ const SessionsForm: React.FC<SessionsFormProps> = ({ onClose, cloudHostBasePath,
         url = selectedSession.url;
       }
     } else if (isElectron) {
-      url = localUrl || "";
+      url = buildLocalUrl(settings, true) || "";
     } else {
       url = buildCloudUrl(selectedLeader?.id || guestLeaderId);
     }
