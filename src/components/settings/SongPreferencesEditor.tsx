@@ -703,7 +703,7 @@ const SongPreferencesEditor = forwardRef<SongPreferencesEditorHandle, SongPrefer
                           }
                         }}
                       >
-                        {row.preference.instructions ? "🗹" : ""}
+                        {row.preference.instructions ? "☑" : ""}
                       </td>
                       <td
                         className={isMergeMode ? "pref-mode-cell-readonly" : "pref-mode-cell"}

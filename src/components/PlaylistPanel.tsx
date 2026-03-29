@@ -2140,7 +2140,7 @@ const PlaylistItemRow: React.FC<{
               onInstructionsClick();
             }}
           >
-            {(hasInstructions || isInstructionsHovered) && <span className="instructions-icon">{hasInstructions ? "🗹" : "☐"}</span>}
+            {(hasInstructions || isInstructionsHovered) && <span className="instructions-icon">{hasInstructions ? "☑" : "☐"}</span>}
           </td>
           {}
         </>
