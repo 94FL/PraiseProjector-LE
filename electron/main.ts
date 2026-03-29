@@ -672,6 +672,7 @@ ipcMain.handle("get-main-window-display-id", () => {
 
 // IPC handlers for display/monitor management
 let displayWindow: BrowserWindow | null = null;
+let pendingDisplayWindowImageDataUrl: string | null = null;
 
 ipcMain.handle("get-all-displays", () => {
   const displays = screen.getAllDisplays();
@@ -705,6 +706,7 @@ ipcMain.handle("show-display-window", async (_event, displayId: string, imageDat
     y: targetDisplay.bounds.y,
     width: targetDisplay.bounds.width,
     height: targetDisplay.bounds.height,
+    backgroundColor: "#000000",
     fullscreen: true,
     frame: false,
     alwaysOnTop: true,
@@ -717,8 +719,8 @@ ipcMain.handle("show-display-window", async (_event, displayId: string, imageDat
     },
   });
 
-  // Load HTML with the image — subsequent updates are pushed via
-  // the set-display-window-image handler which calls updateDisplayWindowImage().
+  // Load a minimal shell; image frames are pushed after DOM is ready.
+  pendingDisplayWindowImageDataUrl = imageData || lastNetDisplaySourceImageDataUrl || null;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -741,10 +743,19 @@ ipcMain.handle("show-display-window", async (_event, displayId: string, imageDat
       </style>
     </head>
     <body>
-      <img src="${imageData}" />
+      <img />
     </body>
     </html>
   `;
+
+  displayWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    console.error("[DisplayWindow] Failed to load projector shell", { errorCode, errorDescription });
+  });
+
+  // Ensure the latest frame is applied once the display window DOM is ready.
+  displayWindow.webContents.once("did-finish-load", () => {
+    updateDisplayWindowImage(pendingDisplayWindowImageDataUrl ?? lastNetDisplaySourceImageDataUrl);
+  });
 
   displayWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
 });
@@ -869,6 +880,11 @@ ipcMain.on("sync-settings", (_event, settings: Settings) => {
 // Update the Electron display window image directly from the main process
 function updateDisplayWindowImage(pngDataUrl: string | null): void {
   if (!displayWindow || displayWindow.isDestroyed()) return;
+  if (displayWindow.webContents.isLoadingMainFrame()) {
+    pendingDisplayWindowImageDataUrl = pngDataUrl;
+    return;
+  }
+  pendingDisplayWindowImageDataUrl = pngDataUrl;
   if (pngDataUrl) {
     displayWindow.webContents.executeJavaScript(`document.querySelector('img').src = ${JSON.stringify(pngDataUrl)};`).catch(() => {});
   } else {
