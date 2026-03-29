@@ -148,6 +148,7 @@ class ChordProEditor extends React.Component<ChordProEditorProps, ChordProEditor
   private hasLoadedDocument = false;
   private wysiwygLoaded = false;
   private wysiwygInitialized = false;
+  private pendingExternalSongReload = false;
   private isEditable = false;
   private externalPreviousValues: Map<keyof ChordProExternalCallbacks, unknown> | null = null;
   private externalObjectCreated = false;
@@ -186,20 +187,12 @@ class ChordProEditor extends React.Component<ChordProEditorProps, ChordProEditor
     const compareBaseChanged = prevProps.compareBase !== this.props.compareBase;
 
     if (songChanged || compareBaseChanged) {
-      // Only leave edit mode if we're not in initialEditMode (wizard scenario)
-      if (this.isEditable && !this.props.initialEditMode) {
-        this.leaveEditMode();
-      }
-      this.hasLoadedDocument = false; // Reset for new song
-      this.wysiwygInitialized = false; // Reset initialization flag
-      const chordProText = this.loadSong();
-      // Only try to load to WYSIWYG if it's loaded and we have a host element
-      if (this.wysiwygLoaded && this.chordProHost) {
-        this.loadSongToWysiwyg(chordProText);
-      }
-      // Re-enable edit mode if needed after loading
-      if (this.props.initialEditMode && !this.isEditable) {
-        this.enterEditMode();
+      // While editing, keep the current document stable and defer loading
+      // incoming song/compareBase changes until edit mode exits.
+      if (this.isEditable) {
+        this.pendingExternalSongReload = true;
+      } else {
+        this.applyIncomingSongProps();
       }
     }
 
@@ -729,6 +722,12 @@ class ChordProEditor extends React.Component<ChordProEditorProps, ChordProEditor
     // Tell the parent that edit mode is done.
     this.props.onEditModeChange?.(false);
 
+    // Apply any deferred external song change now that edit mode is off.
+    if (this.pendingExternalSongReload) {
+      this.pendingExternalSongReload = false;
+      this.applyIncomingSongProps();
+    }
+
     // Force re-render and reapply dark mode after render completes
     this.forceUpdate(() => {
       // Additional dark mode application after React's render cycle completes
@@ -736,6 +735,20 @@ class ChordProEditor extends React.Component<ChordProEditorProps, ChordProEditor
         this.applyDarkModeToEditor();
       });
     });
+  }
+
+  private applyIncomingSongProps() {
+    this.hasLoadedDocument = false; // Reset for new song
+    this.wysiwygInitialized = false; // Reset initialization flag
+    const chordProText = this.loadSong();
+    // Only try to load to WYSIWYG if it's loaded and we have a host element
+    if (this.wysiwygLoaded && this.chordProHost) {
+      this.loadSongToWysiwyg(chordProText);
+    }
+    // Re-enable edit mode if needed after loading
+    if (this.props.initialEditMode && !this.isEditable) {
+      this.enterEditMode();
+    }
   }
 
   public highlightSectionInEditor(from: number, to: number) {
