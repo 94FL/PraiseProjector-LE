@@ -52,6 +52,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
   const { t } = useLocalization();
   const { tt } = useTooltips();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [authDialogInitialUsername, setAuthDialogInitialUsername] = useState("");
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const [pendingSongCount, setPendingSongCount] = useState(0);
   const [cloudDbVersion, setCloudDbVersion] = useState<number | null>(null);
@@ -227,6 +228,8 @@ const UserPanel: React.FC<UserPanelProps> = ({
   useEffect(() => {
     const handleOpenAuthDialog = (e: Event) => {
       const action = (e as CustomEvent).detail?.action;
+      // Re-auth flow (e.g. token expired): prefill current username.
+      setAuthDialogInitialUsername(user?.login || username || "");
       if (action === "songCheck") {
         pendingActionAfterLoginRef.current = () => onSongCheckClickRef.current?.();
       } else {
@@ -238,7 +241,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
 
     window.addEventListener("pp-open-auth-dialog", handleOpenAuthDialog);
     return () => window.removeEventListener("pp-open-auth-dialog", handleOpenAuthDialog);
-  }, []);
+  }, [user?.login, username]);
 
   // Handle leader selection change (matching C# cmbLeader.SelectedIndexChanged)
   const handleLeaderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -247,6 +250,8 @@ const UserPanel: React.FC<UserPanelProps> = ({
   };
 
   const handleUserButtonClick = () => {
+    // Explicit account switch flow: start with empty username.
+    setAuthDialogInitialUsername("");
     setShowAuthDialog(true);
   };
 
@@ -457,7 +462,7 @@ const UserPanel: React.FC<UserPanelProps> = ({
           }}
           showOffline={true}
           onLogout={handleLogout}
-          initialUsername={user?.login || username || ""}
+          initialUsername={authDialogInitialUsername}
         />
       )}
     </div>
