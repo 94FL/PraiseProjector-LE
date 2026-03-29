@@ -81,8 +81,7 @@ export enum IconType {
 interface IconConfig {
   faIcon?: string;
   faContent?: React.ReactNode;
-  faContentAlways?: boolean;
-  imagePath: string;
+  imagePath?: string;
   alt: string;
 }
 
@@ -310,8 +309,6 @@ const iconMap: Record<IconType, IconConfig> = {
   [IconType.MUSIC]: { faIcon: "fa fa-music", imagePath: "assets/music.png", alt: "Music" },
   [IconType.TEXT_ONLY]: {
     faIcon: "fa fa-file-text-o",
-    imagePath: "assets/text.png",
-    faContentAlways: true,
     alt: "Text Only",
   },
   [IconType.ALERT]: {
@@ -339,8 +336,6 @@ const iconMap: Record<IconType, IconConfig> = {
         />
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/heart_empty.png",
     alt: "Not Preferred",
   },
   [IconType.HEART_FILLED]: {
@@ -350,15 +345,11 @@ const iconMap: Record<IconType, IconConfig> = {
         <path d="M8 14s-5.5-3.5-6.5-7C.5 3.5 3 1 5.5 1.5 7 1.8 8 3 8 3s1-1.2 2.5-1.5C13 1 15.5 3.5 14.5 7 13.5 10.5 8 14 8 14z" />
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/heart_filled.png",
     alt: "Preferred",
   },
   [IconType.HEART_IGNORED]: {
     faIcon: "fa fa-times",
     faContent: "\u2716",
-    faContentAlways: true,
-    imagePath: "assets/heart_empty.png",
     alt: "Ignored",
   },
   [IconType.BIG_HEART_EMPTY]: {
@@ -378,8 +369,6 @@ const iconMap: Record<IconType, IconConfig> = {
         <path d="M 11.252 7.343 C 11.255 3.461 8.607 2.927 6.217 4.937 C 5.699 5.373 5.665 7.096 5.396 7.717 C 2.196 7.085 1.395 9.229 3.339 10.727 C 3.76 11.051 4.093 11.12 4.597 11.296 L 6.15 11.461 L 5.887 13.128 L 4.328 13.128 C 1.179 13.149 -1.004 9.56 0.551 6.823 C 1.249 5.597 2.974 5.145 4.149 5.552 C 3.902 1.443 11.353 -0.008 12.878 4.195 C 13.108 4.829 13.047 4.975 13.127 6.098 C 17.038 5.726 16.673 11.28 14.246 12.67 C 13.954 12.835 12.717 12.905 12.394 12.983 L 12.061 12.541 L 10.994 11.058 L 12.96 11.052 C 14.223 10.276 14.876 7.942 11.478 7.709 C 11.461 7.708 11.266 7.35 11.252 7.343 Z"></path>
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/cloud.png",
     alt: "Cloud Auth Failed",
   },
   [IconType.SEARCH_FUZZY]: {
@@ -396,8 +385,6 @@ const iconMap: Record<IconType, IconConfig> = {
         <path d="M5 20 C 5 12, 20 12, 20 20 C 20 28, 35 28, 35 20" />
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/settings.png",
     alt: "Fuzzy Search",
   },
   [IconType.SEARCH_CASE]: {
@@ -408,8 +395,6 @@ const iconMap: Record<IconType, IconConfig> = {
         </text>
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/text.png",
     alt: "Case Sensitive",
   },
   [IconType.SEARCH_WHOLE_WORD]: {
@@ -429,20 +414,14 @@ const iconMap: Record<IconType, IconConfig> = {
         <path d="M11 22 V28 H29 V22" strokeWidth="2.4" />
       </svg>
     ),
-    faContentAlways: true,
-    imagePath: "assets/text.png",
     alt: "Whole Words",
   },
   [IconType.CHECKBOX_CHECKED]: {
     faIcon: "fa fa-check-square-o",
-    faContentAlways: true,
-    imagePath: "assets/text.png",
     alt: "Checked",
   },
   [IconType.CHECKBOX_EMPTY]: {
     faIcon: "fa fa-square-o",
-    faContentAlways: true,
-    imagePath: "assets/text.png",
     alt: "Unchecked",
   },
 };
@@ -462,13 +441,14 @@ export class IconService {
       return null;
     }
 
-    if (useFontAwesome || config.faContentAlways) {
+    if (useFontAwesome || !config.imagePath) {
       if (config.faContent) {
         return config.faContent;
       }
       if (config.faIcon) {
         return <i className={config.faIcon}></i>;
       }
+      return null;
     }
 
     // Return PNG image with proper base path
