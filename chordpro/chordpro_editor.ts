@@ -882,6 +882,7 @@ export class ChordProEditor extends ChordDrawer {
   darkMode(dark: boolean) {
     if (this.isDark !== dark) {
       this.isDark = dark;
+      this.chordSelector?.setDarkMode(dark);
       this.displayProps = defaultDisplayProperties(dark);
       this.directiveStyles = defaultStyles(this.displayProps.lyricsFont, dark);
       this.draw();

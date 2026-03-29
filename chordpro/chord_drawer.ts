@@ -41,6 +41,11 @@ export class ChordDrawer {
   protected chordsSizeCache = new VersionedMap<string, number, number>(-1);
   protected chordsInKey = new VersionedMap<string, string, string>("");
 
+  private getCanvasBackgroundColor(canvas: HTMLCanvasElement) {
+    const backgroundColor = getComputedStyle(canvas).backgroundColor;
+    return backgroundColor && backgroundColor !== "transparent" && backgroundColor !== "rgba(0, 0, 0, 0)" ? backgroundColor : null;
+  }
+
   constructor(
     public readonly system: ChordSystem,
     protected readonly chordSelector?: ChordSelector,
@@ -472,35 +477,42 @@ export class ChordDrawer {
     canvas.height = canvas.offsetHeight;
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      ctx.strokeStyle = this.displayProps.lineColor;
-      ctx.fillStyle = this.displayProps.backgroundColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const maxRect = (refSize: Size) => {
-        const center = {
-          x: canvas.width / 2,
-          y: canvas.height / 2,
+      const backgroundColor = this.getCanvasBackgroundColor(canvas);
+      const originalBackgroundColor = this.displayProps.backgroundColor;
+      if (backgroundColor) this.displayProps.backgroundColor = backgroundColor;
+      try {
+        ctx.strokeStyle = this.displayProps.lineColor;
+        ctx.fillStyle = this.displayProps.backgroundColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const maxRect = (refSize: Size) => {
+          const center = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+          };
+          const scale = refSize.width / refSize.height;
+          let width: number, height: number;
+          if (canvas.width / canvas.height > scale) {
+            height = canvas.height;
+            width = height * scale;
+          } else {
+            width = canvas.width;
+            height = width / scale;
+          }
+          return {
+            x: center.x - width / 2,
+            y: center.y - height / 2,
+            width,
+            height,
+          };
         };
-        const scale = refSize.width / refSize.height;
-        let width: number, height: number;
-        if (canvas.width / canvas.height > scale) {
-          height = canvas.height;
-          width = height * scale;
-        } else {
-          width = canvas.width;
-          height = width / scale;
+        switch (type) {
+          case "GUITAR":
+            return this.drawGuitarChordLayout(ctx, rect || maxRect(this.displayProps.guitarChordSize), chord, forcedVariantIndex, noteHitBoxes);
+          case "PIANO":
+            return this.drawPianoChordLayout(ctx, rect || maxRect(this.displayProps.pianoChordSize), chord, forcedVariantIndex, noteHitBoxes);
         }
-        return {
-          x: center.x - width / 2,
-          y: center.y - height / 2,
-          width,
-          height,
-        };
-      };
-      switch (type) {
-        case "GUITAR":
-          return this.drawGuitarChordLayout(ctx, rect || maxRect(this.displayProps.guitarChordSize), chord, forcedVariantIndex, noteHitBoxes);
-        case "PIANO":
-          return this.drawPianoChordLayout(ctx, rect || maxRect(this.displayProps.pianoChordSize), chord, forcedVariantIndex, noteHitBoxes);
+      } finally {
+        this.displayProps.backgroundColor = originalBackgroundColor;
       }
     }
     return false;

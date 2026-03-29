@@ -1,7 +1,7 @@
 import { allChordInfo, all_modifiers, ChordLayoutGenerator, createChordInfo, stepsToModifier } from "./allchords";
 import { ChordProChordBase, ChordSystem, getChordSystem } from "./chordpro_base";
 import { ChordDetails, NoteSystemCode } from "./note_system";
-import { makeReadonly, makeVisible } from "../common/utils";
+import { makeDark, makeReadonly, makeVisible } from "../common/utils";
 import { renderAbc } from "abcjs";
 import { NoteHitBox } from "./ui_base";
 import { ChordBoxType } from "./chord_drawer";
@@ -62,6 +62,23 @@ export class ChordSelector {
   private onCloseCallback?: (chord?: string) => void;
   private applyButton: HTMLInputElement | null = null;
   private musicChordBoxDivName = "musicChordBox";
+  private darkMode = false;
+  private themeRefreshHandle: number | null = null;
+
+  public setDarkMode(dark: boolean) {
+    if (this.darkMode !== dark) this.darkMode = dark;
+    if (this.inModalState) {
+      this.applyTheme();
+      this.drawChord(this.updateFrom());
+      if (this.themeRefreshHandle != null) window.clearTimeout(this.themeRefreshHandle);
+      this.themeRefreshHandle = window.setTimeout(() => {
+        this.themeRefreshHandle = null;
+        if (!this.inModalState) return;
+        this.applyTheme();
+        this.drawChord(this.updateFrom());
+      }, 0);
+    }
+  }
 
   private static findOrCreateElement(name: string | null | undefined, type: string, parent: HTMLElement) {
     let element = name ? document.getElementById(name) : null;
@@ -266,26 +283,22 @@ export class ChordSelector {
   private touchHandler(event: TouchEvent) {
     if (event.changedTouches.length !== 1) return;
 
+    const shouldUseNativeTouch = (element: EventTarget | null) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const tagName = element.tagName.toUpperCase();
+      if (tagName === "SELECT" || tagName === "OPTION" || tagName === "INPUT" || tagName === "BUTTON") return true;
+      return false;
+    };
+
     // Skip touch-to-mouse conversion for form elements that need native touch handling
     // (select dropdowns, inputs, buttons need native touch to work properly on mobile)
     // Check both direct target and composed path for form elements
-    const target = event.target as HTMLElement;
-    const tagName = target.tagName.toUpperCase();
-    if (tagName === "SELECT" || tagName === "OPTION" || tagName === "INPUT" || tagName === "BUTTON") {
-      // Allow native touch handling - don't simulate mouse events
-      return;
-    }
+    if (shouldUseNativeTouch(event.target)) return;
 
     // Also check composed path for nested elements
     const path = event.composedPath?.() || [];
     for (const el of path) {
-      if (el instanceof HTMLElement) {
-        const elTagName = el.tagName.toUpperCase();
-        if (elTagName === "SELECT" || elTagName === "INPUT" || elTagName === "BUTTON") {
-          // Form element in event path - allow native handling
-          return;
-        }
-      }
+      if (shouldUseNativeTouch(el)) return;
     }
 
     const touches = event.changedTouches,
@@ -462,6 +475,20 @@ export class ChordSelector {
     return info;
   }
 
+  private applyTheme() {
+    makeDark(this.parent, this.darkMode);
+    if (this.guitarChordBox) {
+      this.guitarChordBox.style.filter = "";
+    }
+    if (this.pianoChordBox) {
+      this.pianoChordBox.style.filter = "";
+    }
+    if (this.musicChordBox) {
+      makeDark(this.musicChordBox, this.darkMode);
+      for (const div of Array.from(this.musicChordBox.getElementsByTagName("div"))) makeDark(div, this.darkMode);
+    }
+  }
+
   drawChord(desc: string, resize_only = false) {
     const chord = this.identifyChord(desc, true);
     if (!chord) return;
@@ -490,6 +517,7 @@ export class ChordSelector {
         keys.push(abcformat(universalNoteCode(chord.bassNote)).toUpperCase() + suffix);
       }
       renderAbc(this.musicChordBoxDivName, "[" + keys.join("") + "]2");
+      this.applyTheme();
     }
     if (this.guitarChordBox && this.chordBoxDrawer)
       this.guitarHitBoxes = this.chordBoxDrawer("GUITAR", chord, this.guitarChordBox, this.guitarVariant);
@@ -653,6 +681,7 @@ export class ChordSelector {
 
   showDialog(chord: string, readOnly: boolean, dark: boolean) {
     this.inModalState = true;
+    this.darkMode = dark;
 
     this.readOnly = !!readOnly;
     makeReadonly(this.selBaseNote, this.readOnly);
@@ -663,17 +692,19 @@ export class ChordSelector {
     if (this.notes) makeReadonly(this.notes, this.readOnly);
     if (this.applyButton) makeVisible(this.applyButton, !this.readOnly);
 
-    const invert = "invert(" + (dark ? 1 : 0) + ")";
-
     this.parent.style.display = "block";
-    this.parent.style.filter = invert;
-    if (this.guitarChordBox) this.guitarChordBox.style.filter = invert;
-    if (this.pianoChordBox) this.pianoChordBox.style.filter = invert;
+    this.parent.style.filter = "";
+    this.applyTheme();
 
     if (chord) this.updateForm(chord);
   }
 
   closeDialog(apply?: boolean) {
+    if (!this.inModalState) return;
+    if (this.themeRefreshHandle != null) {
+      window.clearTimeout(this.themeRefreshHandle);
+      this.themeRefreshHandle = null;
+    }
     const chord = this.updateFrom();
     const details = this.identifyChord(chord);
     if (this.onCloseCallback) this.onCloseCallback(apply && details ? chord : undefined);

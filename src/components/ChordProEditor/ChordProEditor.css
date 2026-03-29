@@ -211,6 +211,61 @@
   background-color: #fff; /* Ensure visible even when empty */
 }
 
+.wysiwyg-host .chordSelector {
+  padding: 12px 34px 10px 10px;
+  background: var(--pp-panel-bg);
+  color: var(--pp-text-color);
+  border: 1px solid var(--pp-border-color);
+}
+
+.wysiwyg-host .chordSelector select,
+.wysiwyg-host .chordSelector input[type="text"] {
+  background: var(--pp-input-bg);
+  color: var(--pp-text-color);
+  border: 1px solid var(--pp-input-border);
+}
+
+.wysiwyg-host .chordSelector input[type="button"] {
+  background: var(--pp-bg-tertiary);
+  color: var(--pp-text-color);
+  border: 1px solid var(--pp-border-color);
+}
+
+.wysiwyg-host .chordSelector #closeSelector {
+  color: var(--pp-text-color);
+}
+
+.wysiwyg-host .chordSelector .chord-selector-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--pp-text-color);
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.9;
+  touch-action: manipulation;
+}
+
+.wysiwyg-host .chordSelector .chord-selector-close:hover {
+  opacity: 1;
+}
+
+.wysiwyg-host .chordSelector #musicChordBox,
+.wysiwyg-host .chordSelector #pianoChordBox,
+.wysiwyg-host .chordSelector #guitarChordBox {
+  background: var(--pp-panel-bg);
+}
+
 .wysiwyg-host canvas.chordpro-editor-canvas {
   display: block;
 }
@@ -301,6 +356,25 @@
 [data-theme="dark"] .wysiwyg-host,
 [data-theme="dark"] .meta-table-container {
   background-color: var(--pp-panel-bg);
+}
+
+[data-theme="dark"] .wysiwyg-host .chordSelector {
+  background: var(--pp-panel-bg);
+  color: var(--pp-text-color);
+  border-color: var(--pp-border-color);
+}
+
+[data-theme="dark"] .wysiwyg-host .chordSelector select,
+[data-theme="dark"] .wysiwyg-host .chordSelector input[type="text"] {
+  background: var(--pp-input-bg);
+  color: var(--pp-text-color);
+  border-color: var(--pp-input-border);
+}
+
+[data-theme="dark"] .wysiwyg-host .chordSelector input[type="button"] {
+  background: var(--pp-bg-tertiary);
+  color: var(--pp-text-color);
+  border-color: var(--pp-border-color);
 }
 
 [data-theme="dark"] .empty-state {

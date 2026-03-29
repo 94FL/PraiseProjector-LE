@@ -73,12 +73,8 @@ type ChordProAPIBound = {
 const CHORD_PRO_MARKUP = `
     <div style="outline: none; position: relative;"></div>
     <div id="chordsel" class="chordSelector" style="display: none;">
+    <button id="closeSelector" type="button" class="chord-selector-close" aria-label="Close selector">&times;</button>
         <table style="width: 100%">
-            <tr>
-                <td colspan="4">
-                    <div id="closeSelector" style="float:right; width:auto; cursor: pointer;">X</div>
-                </td>
-            </tr>
             <tr>
                 <td>Base&nbsp;note</td>
                 <td>
