@@ -1,6 +1,17 @@
 // The bare minimum code required for an Electron main process
 
-import { app, BrowserWindow, ipcMain, screen, dialog, shell, powerSaveBlocker, type MessageBoxOptions, type MessageBoxReturnValue } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  screen,
+  dialog,
+  shell,
+  powerSaveBlocker,
+  nativeImage,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+} from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
@@ -13,7 +24,6 @@ import { UdpServer, getUdpServerInstance } from "./udp";
 import { P2PTransport, getP2PTransportInstance } from "./p2p-transport";
 import { initializeWebServer, getWebServerInstance } from "./webserver";
 import { Settings } from "../src/types";
-import { setupBLEPeripheralIPC } from "./blePeripheral";
 import { installLoggerInterceptor, setupLoggerIPC, closeLogViewerWindow } from "./logger";
 import { changeDisplay } from "./display";
 import { WindowBounds } from "../src/types/electron";
@@ -50,6 +60,53 @@ app.on("second-instance", () => {
 
 // Track powerSaveBlocker ID to prevent duplicate blockers
 let powerSaveBlockerId: number | null = null;
+
+type NetDisplayEncodeSettings = {
+  jpegQuality: number;
+  imageScale: number;
+};
+
+const netDisplayEncodeSettings: NetDisplayEncodeSettings = {
+  jpegQuality: 70,
+  imageScale: 1,
+};
+
+let lastNetDisplaySourceImageDataUrl: string | null = null;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function updateNetDisplayEncodeSettings(settings: Settings): boolean {
+  const nextJpegQuality = clamp(Math.round(settings.netDisplayJpegQuality ?? 70), 1, 100);
+  const nextImageScale = clamp(settings.netDisplayImageScale ?? 1, 0.1, 1);
+  const changed = nextJpegQuality !== netDisplayEncodeSettings.jpegQuality || nextImageScale !== netDisplayEncodeSettings.imageScale;
+  netDisplayEncodeSettings.jpegQuality = nextJpegQuality;
+  netDisplayEncodeSettings.imageScale = nextImageScale;
+  return changed;
+}
+
+function encodeNetDisplayBase64(imageDataUrl: string | null): string | null {
+  if (!imageDataUrl) return null;
+  try {
+    let image = nativeImage.createFromDataURL(imageDataUrl);
+    if (image.isEmpty()) return null;
+
+    const scale = netDisplayEncodeSettings.imageScale;
+    if (scale < 1) {
+      const size = image.getSize();
+      const width = Math.max(1, Math.round(size.width * scale));
+      const height = Math.max(1, Math.round(size.height * scale));
+      image = image.resize({ width, height, quality: "best" });
+    }
+
+    const jpegBuffer = image.toJPEG(netDisplayEncodeSettings.jpegQuality);
+    return jpegBuffer.toString("base64");
+  } catch (error) {
+    console.error("[Main] Failed to encode net display image", error);
+    return null;
+  }
+}
 
 // Install logger interceptor early to capture all console output
 installLoggerInterceptor();
@@ -661,7 +718,7 @@ ipcMain.handle("show-display-window", async (_event, displayId: string, imageDat
   });
 
   // Load HTML with the image — subsequent updates are pushed via
-  // the set-net-display-image handler which calls updateDisplayWindowImage()
+  // the set-display-window-image handler which calls updateDisplayWindowImage().
   const html = `
     <!DOCTYPE html>
     <html>
@@ -775,6 +832,7 @@ ipcMain.handle("save-database-file", async (_event, payload: { data: ArrayBuffer
 // Settings sync from renderer - update webserver settings
 ipcMain.on("sync-settings", (_event, settings: Settings) => {
   console.log("Settings synced from renderer:", settings);
+  const netDisplayEncodeChanged = updateNetDisplayEncodeSettings(settings);
   const webServer = getWebServerInstance();
   if (webServer) {
     webServer.updateSettings({
@@ -786,6 +844,11 @@ ipcMain.on("sync-settings", (_event, settings: Settings) => {
       allClientsCanUseLeaderMode: settings.allClientsCanUseLeaderMode,
       leaderModeClients: settings.leaderModeClients,
     });
+
+    // Re-encode and republish the latest net display frame when encode settings change.
+    if (netDisplayEncodeChanged && lastNetDisplaySourceImageDataUrl) {
+      webServer.setImage(encodeNetDisplayBase64(lastNetDisplaySourceImageDataUrl));
+    }
   }
 
   // Handle keepAwake via powerSaveBlocker
@@ -813,17 +876,12 @@ function updateDisplayWindowImage(pngDataUrl: string | null): void {
   }
 }
 
-// Net display image update from renderer (matching C# SetImage)
-ipcMain.on("set-net-display-image", (_event, imageDataUrl: string | null) => {
-  const webServer = getWebServerInstance();
-  if (webServer) {
-    webServer.setImage(imageDataUrl);
-  }
-});
-
 // Internal Electron display window image update (lossless frame)
 ipcMain.on("set-display-window-image", (_event, imageDataUrl: string | null) => {
+  lastNetDisplaySourceImageDataUrl = imageDataUrl;
+
   updateDisplayWindowImage(imageDataUrl);
+  getWebServerInstance()?.setImage(encodeNetDisplayBase64(imageDataUrl));
 });
 
 // Sync leader name (for UDP offer - C# uses cmbLeader.Text which is the name, not ID)

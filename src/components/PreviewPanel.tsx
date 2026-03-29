@@ -19,6 +19,7 @@ import { useSessionUrl } from "../hooks/useSessionUrl";
 import { Panel, PanelGroup } from "react-resizable-panels";
 import ResizeHandle from "./ResizeHandle";
 import { imageStorageService } from "../services/ImageStorage";
+import { projectedImageCacheService } from "../services/ProjectedImageCacheService";
 
 type PreviewTab = "format" | "image" | "message";
 
@@ -169,7 +170,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
 
     // Preview canvas state
     const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
-    const [netDisplayDataUrl, setNetDisplayDataUrl] = useState<string | null>(null);
     const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
     const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
 
@@ -860,10 +860,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
     // Live QR position: prefer drag position, fall back to persisted settings
     const liveQrX = qrDragPos !== null ? qrDragPos.x : (settings?.qrCodeX ?? 85);
     const liveQrY = qrDragPos !== null ? qrDragPos.y : (settings?.qrCodeY ?? 82);
-    const netDisplayJpegQuality = Math.max(1, Math.min(100, settings?.netDisplayJpegQuality ?? 70));
-    const netDisplayJpegQualityFactor = netDisplayJpegQuality / 100;
-    const netDisplayImageScale = Math.max(0.1, Math.min(1, settings?.netDisplayImageScale ?? 1));
-
     // Clamp QR position when size changes so it stays within the image area
     useEffect(() => {
       if (!settings) return;
@@ -888,7 +884,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
 
       if (!rendererRef.current) {
         const timerId = setTimeout(() => setPreviewDataUrl(null), 0);
-        setNetDisplayDataUrl(null);
         return () => clearTimeout(timerId);
       }
 
@@ -948,24 +943,30 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
           updateCurrentDisplay({ message: text });
 
           try {
-            const canvas = renderer.renderSection(text, renderSettings, showImage ? bgImage : null);
-            setPreviewDataUrl(canvas.toDataURL("image/png"));
-            let netDisplayCanvas = canvas;
-            if (netDisplayImageScale < 1) {
-              netDisplayCanvas = document.createElement("canvas");
-              netDisplayCanvas.width = canvas.width * netDisplayImageScale;
-              netDisplayCanvas.height = canvas.height * netDisplayImageScale;
-              const ctx = netDisplayCanvas.getContext("2d");
-              if (ctx) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, netDisplayCanvas.width, netDisplayCanvas.height);
-              }
-            }
-            setNetDisplayDataUrl(netDisplayCanvas.toDataURL("image/jpeg", netDisplayJpegQualityFactor));
+            const backgroundSignature =
+              showImage && bgImage ? `${selectedImageId ?? "inline"}|${bgImage.naturalWidth}x${bgImage.naturalHeight}` : "none";
+
+            const cacheKey = projectedImageCacheService.buildCacheKey({
+              text,
+              renderSettingsSnapshot: {
+                ...renderSettings,
+                // Explicitly include image-on/off in key; bgImage signature is tracked separately.
+                showImage,
+              },
+              backgroundSignature,
+            });
+
+            const useCache = !isQrDragging && qrDragPos === null;
+            const previewPng = useCache
+              ? projectedImageCacheService.getOrCreate(cacheKey, () =>
+                  renderer.renderSection(text, renderSettings, showImage ? bgImage : null).toDataURL("image/png")
+                )
+              : renderer.renderSection(text, renderSettings, showImage ? bgImage : null).toDataURL("image/png");
+
+            setPreviewDataUrl(previewPng);
           } catch (error) {
             console.error("Preview", "Error rendering message", error);
             setPreviewDataUrl(null);
-            setNetDisplayDataUrl(null);
           }
         };
 
@@ -979,7 +980,6 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
         // Normal section rendering
         if (selectedSectionIndex < 0 || !sections[selectedSectionIndex]) {
           setPreviewDataUrl(null);
-          setNetDisplayDataUrl(null);
           return;
         }
 
@@ -1001,12 +1001,11 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       projectorWidth,
       projectorHeight,
       qrCodeUrl,
-      netDisplayJpegQualityFactor,
-      netDisplayImageScale,
       isQrDragging,
       qrDragPos,
       liveQrX,
       liveQrY,
+      selectedImageId,
     ]);
 
     const handleSectionClick = (index: number) => {
@@ -1371,11 +1370,9 @@ const PreviewPanel = forwardRef<PreviewPanelMethods, PreviewPanelProps>(
       if (projectorEnabled && previewDataUrl && projectorChannelRef.current) {
         projectorChannelRef.current.postMessage({ type: "UPDATE_DISPLAY", imageData: previewDataUrl });
       }
-      // Send to webserver for net display clients (matching C# SetImage)
-      // Keep Electron display window lossless (PNG) while netdisplay uses JPEG.
+      // Send frame once; main process updates both display window and net display clients.
       window.electronAPI?.setDisplayWindowImage?.(previewDataUrl);
-      window.electronAPI?.setNetDisplayImage?.(netDisplayDataUrl);
-    }, [previewDataUrl, netDisplayDataUrl, projectorWindowRef, projectorEnabled]);
+    }, [previewDataUrl, projectorWindowRef, projectorEnabled]);
 
     // Note: We intentionally do NOT close the projector window on unmount
     // because the PreviewPanel can be conditionally rendered (paging mode vs 3-panel mode)

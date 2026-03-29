@@ -1,5 +1,5 @@
 import { TextMeasurer } from "./TextMeasurer";
-import { generateQRCodeSVG } from "../hooks/useSessionUrl";
+import { qrCodeCacheService } from "../services/QRCodeCacheService";
 
 export interface RenderSettings {
   fontFamily: string;
@@ -79,55 +79,9 @@ export class SectionRenderer {
       const qrX = Math.round(this.canvas.width * ((settings.qrCodeX ?? 85) / 100));
       const qrY = Math.round(this.canvas.height * ((settings.qrCodeY ?? 82) / 100));
 
-      // Generate QR SVG markup, then rasterize the path data into a temporary canvas.
       try {
-        const svgMarkup = generateQRCodeSVG(settings.qrCodeUrl, qrSize, "M");
-
-        // Parse the SVG markup
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
-        const svg = doc.querySelector("svg");
-        const path = doc.querySelectorAll("svg > path");
-        let fgPathD: string | null = null;
-        let numCells = qrSize; // fallback
-        if (svg) {
-          const viewBox = svg.getAttribute("viewBox");
-          if (viewBox) {
-            const parts = viewBox.split(" ").map((p) => parseInt(p, 10));
-            if (parts.length === 4 && !Number.isNaN(parts[2])) numCells = parts[2];
-          }
-        }
-        // QRCodeSVG renders two <path> elements: background then foreground
-        if (path && path.length >= 2) fgPathD = (path[1] as SVGPathElement).getAttribute("d");
-        else if (path && path.length === 1) fgPathD = (path[0] as SVGPathElement).getAttribute("d");
-
-        // Create a temporary canvas and draw parsed path rectangles onto it
-        const qrCanvas = document.createElement("canvas");
-        qrCanvas.width = qrSize;
-        qrCanvas.height = qrSize;
-        const qctx = qrCanvas.getContext("2d");
-        if (qctx && fgPathD) {
-          // Clear and paint a white background so the QR is visible on dark slides.
-          qctx.clearRect(0, 0, qrCanvas.width, qrCanvas.height);
-          qctx.fillStyle = "#ffffff";
-          qctx.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
-          qctx.fillStyle = "#000000";
-
-          // Path format used by QRCodeSVG.generatePath is sequences of `M{x} {y}h{w}v1H{x}z` (integers)
-          // We'll extract all `M` segments and draw rectangles scaled to requested size.
-          const scale = qrSize / numCells;
-          const rx = /M\s*([0-9]+)[, ]\s*([0-9]+)[^h]*h([0-9]+)/g;
-          let m;
-          while ((m = rx.exec(fgPathD)) !== null) {
-            const startX = parseInt(m[1], 10);
-            const startY = parseInt(m[2], 10);
-            const runW = parseInt(m[3], 10);
-            qctx.fillRect(startX * scale, startY * scale, runW * scale, 1 * scale);
-          }
-        }
-
-        // Draw QR onto real canvas
-        this.ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+        // Reuse a cached QR raster per URL and draw it scaled as needed.
+        qrCodeCacheService.drawToContext(this.ctx, settings.qrCodeUrl, qrX, qrY, qrSize, "M");
       } catch (error) {
         // Non-fatal: skip QR if anything fails
         console.error("SectionRenderer: QR generation failed", error);

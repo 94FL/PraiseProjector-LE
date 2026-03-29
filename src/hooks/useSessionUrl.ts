@@ -1,11 +1,9 @@
 import { useMemo } from "react";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { QRCodeSVG } from "qrcode.react";
 import { useSettings } from "./useSettings";
 import { useLeader } from "../contexts/LeaderContext";
 import { cloudApiHost } from "../config";
 import { Settings } from "../types";
+import { qrCodeCacheService } from "../services/QRCodeCacheService";
 
 export type SessionUrlMode =
   /** Local webserver URL when Electron + iWebEnabled, otherwise cloud leader URL */
@@ -43,7 +41,7 @@ export function buildCloudUrl(leaderId: string): string {
  * or injected into a canvas.
  */
 export function generateQRCodeSVG(url: string, size: number = 128, level: "L" | "M" | "Q" | "H" = "M"): string {
-  return renderToStaticMarkup(React.createElement(QRCodeSVG, { value: url, size, level, includeMargin: false }));
+  return qrCodeCacheService.getSVGMarkup(url, size, level);
 }
 
 /**
