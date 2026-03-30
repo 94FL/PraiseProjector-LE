@@ -11,12 +11,18 @@ const TARGETS = {
     outputSubDir: "linux",
     electronBuilderArgs: "--linux AppImage --publish never",
     extraContainerEnv: [],
+    copyCommands: (_baseOutputDir, targetOutputDir) => [
+      `find dist/executables -maxdepth 1 -type f \\( -name 'latest-linux.yml' -o -name '*.AppImage' \\) -exec cp {} /project/${targetOutputDir}/ \\;`,
+    ],
   },
   mac: {
     label: "macOS ZIP",
     outputSubDir: "mac",
     electronBuilderArgs: "--mac zip --publish never",
     extraContainerEnv: ["-e CSC_IDENTITY_AUTO_DISCOVERY=false"],
+    copyCommands: (_baseOutputDir, targetOutputDir) => [
+      `find dist/executables -maxdepth 1 -type f \\( -name 'latest-mac.yml' -o -name '*-mac.zip' -o -name '*-mac.zip.blockmap' \\) -exec cp {} /project/${targetOutputDir}/ \\;`,
+    ],
   },
 };
 
@@ -140,7 +146,7 @@ const buildCmd = [
   "npm run build",
   `npx electron-builder ${targetConfig.electronBuilderArgs}`,
   `mkdir -p /project/${targetOutputDir}`,
-  `cp -r ${baseOutputDir}/* /project/${targetOutputDir}/`,
+  ...targetConfig.copyCommands(baseOutputDir, targetOutputDir),
 ].join(" && ");
 
 const containerCmd = [
