@@ -392,7 +392,66 @@ autoUpdater.forceDevUpdateConfig = !isProductionRuntime();
 // Note: channel defaults to "latest" which uses latest.yml
 autoUpdater.logger = console;
 
-function setupAutoUpdater() {
+let macAutoInstallSupported: boolean | null = null;
+
+async function isMacAutoInstallSupported(): Promise<boolean> {
+  if (process.platform !== "darwin") return true;
+  if (macAutoInstallSupported !== null) return macAutoInstallSupported;
+
+  try {
+    // electron-updater on macOS requires a signed running app for quitAndInstall().
+    await execAsync(`codesign --display --verbose=2 ${JSON.stringify(app.getPath("exe"))}`);
+    macAutoInstallSupported = true;
+  } catch {
+    macAutoInstallSupported = false;
+    console.warn("Auto-update install is disabled on macOS for unsigned builds; manual update will be used.");
+  }
+
+  return macAutoInstallSupported;
+}
+
+async function openManualMacUpdateDialog(reason?: string): Promise<void> {
+  const feedUrl = autoUpdater.getFeedURL();
+
+  if (feedUrl) {
+    const result = await showMainMessageBox({
+      type: "info",
+      title: getMainLocalizedString("UpdateManualInstallRequired"),
+      message: getMainLocalizedString("UpdateAutoInstallNotAvailable"),
+      detail: getMainLocalizedString("UpdateAutoInstallDetail") + (reason ? `\n\n${getMainLocalizedString("TechnicalDetail")} ${reason}` : ""),
+      buttons: [getMainLocalizedString("UpdateOpenReleasesPage"), getMainLocalizedString("UpdateLater")],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+
+    if (result.response === 0) {
+      await shell.openExternal(feedUrl);
+    }
+  } else {
+    await showMainMessageBox({
+      type: "info",
+      title: getMainLocalizedString("UpdateManualInstallRequired"),
+      message: getMainLocalizedString("UpdateAutoInstallNotAvailable"),
+      detail:
+        getMainLocalizedString("UpdateAutoInstallDetail") +
+        "\n\n" +
+        getMainLocalizedString("UpdateVisitWebsite") +
+        (reason ? `\n\n${getMainLocalizedString("TechnicalDetail")} ${reason}` : ""),
+      buttons: [getMainLocalizedString("UpdateLater")],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+  }
+}
+
+async function setupAutoUpdater() {
+  if (process.platform === "darwin") {
+    const canAutoInstall = await isMacAutoInstallSupported();
+    autoUpdater.autoInstallOnAppQuit = canAutoInstall;
+  }
+
   // Log info after a delay to ensure feed URL is populated from app-update.yml
   console.log("=== AUTO-UPDATER SETUP ===");
   console.log("Current app version:", app.getVersion());
@@ -458,7 +517,30 @@ ipcMain.handle("download-update", async () => {
 });
 
 ipcMain.handle("install-update", () => {
-  autoUpdater.quitAndInstall(false, true);
+  const install = async () => {
+    if (process.platform === "darwin" && !(await isMacAutoInstallSupported())) {
+      await openManualMacUpdateDialog();
+      return { success: false, manualRequired: true };
+    }
+
+    try {
+      autoUpdater.quitAndInstall(false, true);
+      return { success: true };
+    } catch (err) {
+      const error = err as Error;
+      const msg = error?.message || "Unknown update install error";
+      console.error("Install update failed:", error);
+
+      if (process.platform === "darwin" && /code signature/i.test(msg)) {
+        await openManualMacUpdateDialog(msg);
+        return { success: false, manualRequired: true, error: msg };
+      }
+
+      return { success: false, error: msg };
+    }
+  };
+
+  return install();
 });
 
 ipcMain.handle("get-app-version", () => {
@@ -609,7 +691,7 @@ app.on("ready", () => {
     mainWindow?.webContents.on("did-finish-load", () => {
       // Additional delay to ensure React components have mounted
       setTimeout(() => {
-        setupAutoUpdater();
+        void setupAutoUpdater();
       }, 2000);
     });
   }

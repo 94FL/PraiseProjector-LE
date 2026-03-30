@@ -12,7 +12,9 @@ interface UpdateContextValue {
   hasUpdate: boolean;
   checkForUpdates: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
-  installUpdate: () => void;
+  installUpdate: () => Promise<void>;
+  installInProgress: boolean;
+  installError: string | null;
 }
 
 const UpdateContext = createContext<UpdateContextValue | null>(null);
@@ -22,6 +24,8 @@ export const UpdateProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [updateDownloaded, setUpdateDownloaded] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
+  const [installInProgress, setInstallInProgress] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -75,15 +79,47 @@ export const UpdateProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     await api.downloadUpdate();
   }, []);
 
-  const installUpdate = useCallback(() => {
-    window.electronAPI?.installUpdate?.();
+  const installUpdate = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.installUpdate) return;
+    setInstallInProgress(true);
+    setInstallError(null);
+    try {
+      const result = (await api.installUpdate?.()) as { success?: boolean; manualRequired?: boolean; error?: string } | undefined;
+      if (result?.success) {
+        // Update is being installed, app will restart
+        return;
+      }
+      if (result?.manualRequired) {
+        setInstallError("Manual update required. Please visit the releases page.");
+      } else if (result?.error) {
+        setInstallError(result.error);
+      } else {
+        setInstallError("Update installation failed");
+      }
+    } catch (err) {
+      setInstallError((err as Error).message || "Update installation failed");
+    } finally {
+      setInstallInProgress(false);
+    }
   }, []);
 
   const hasUpdate = updateAvailable !== null || updateDownloaded !== null;
 
   return (
     <UpdateContext.Provider
-      value={{ updateAvailable, downloadProgress, updateDownloaded, checking, hasUpdate, checkForUpdates, downloadUpdate, installUpdate }}
+      value={{
+        updateAvailable,
+        downloadProgress,
+        updateDownloaded,
+        checking,
+        hasUpdate,
+        checkForUpdates,
+        downloadUpdate,
+        installUpdate,
+        installInProgress,
+        installError,
+      }}
     >
       {children}
     </UpdateContext.Provider>

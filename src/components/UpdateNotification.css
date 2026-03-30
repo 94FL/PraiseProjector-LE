@@ -73,3 +73,16 @@
   background: #4caf50;
   transition: width 0.3s ease;
 }
+
+.update-error {
+  display: block;
+  color: #ff6b6b;
+  font-size: 12px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

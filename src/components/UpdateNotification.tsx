@@ -1,26 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useLocalization } from "../localization/LocalizationContext";
 import { useUpdate } from "../contexts/UpdateContext";
 import "./UpdateNotification.css";
 
 export const UpdateNotification: React.FC = () => {
   const { t } = useLocalization();
-  const { updateAvailable, downloadProgress, updateDownloaded, downloadUpdate, installUpdate } = useUpdate();
-  const [dismissed, setDismissed] = useState(false);
+  const { updateAvailable, downloadProgress, updateDownloaded, downloadUpdate, installUpdate, installInProgress, installError } = useUpdate();
   const [lastDismissedVersion, setLastDismissedVersion] = useState<string | null>(null);
 
-  // Re-show popup when a new version becomes available (different from last dismissed)
-  useEffect(() => {
-    const version = updateDownloaded?.version ?? updateAvailable?.version ?? null;
-    if (version && version !== lastDismissedVersion) {
-      setDismissed(false);
-    }
-  }, [updateAvailable?.version, updateDownloaded?.version, lastDismissedVersion]);
+  // Compute dismissed state: dismissed if current version matches last dismissed version
+  const currentVersion = updateDownloaded?.version ?? updateAvailable?.version ?? null;
+  const dismissed = currentVersion === lastDismissedVersion && currentVersion !== null;
 
   const handleDismiss = () => {
-    const version = updateDownloaded?.version ?? updateAvailable?.version ?? null;
-    setLastDismissedVersion(version);
-    setDismissed(true);
+    setLastDismissedVersion(currentVersion);
   };
 
   if (dismissed || (!updateAvailable && !updateDownloaded)) return null;
@@ -32,10 +25,11 @@ export const UpdateNotification: React.FC = () => {
           <span className="update-message">
             {t("UpdateDownloaded")} ({updateDownloaded.version})
           </span>
-          <button type="button" className="update-btn update-btn-primary" onClick={installUpdate}>
-            {t("UpdateRestartNow")}
+          {installError && <span className="update-error">{installError}</span>}
+          <button type="button" className="update-btn update-btn-primary" onClick={installUpdate} disabled={installInProgress}>
+            {installInProgress ? t("Updating...") : t("UpdateRestartNow")}
           </button>
-          <button type="button" className="update-btn update-btn-secondary" onClick={handleDismiss}>
+          <button type="button" className="update-btn update-btn-secondary" onClick={handleDismiss} disabled={installInProgress}>
             {t("UpdateLater")}
           </button>
         </>
