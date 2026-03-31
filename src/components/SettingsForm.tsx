@@ -166,32 +166,25 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose, initialTab, initia
 
   const handleOk = async () => {
     // Validate typesense if user just switched to it
-    if (settings.searchMethod === "typesense" && initialSettings?.searchMethod !== "typesense") {
-      setSaving(true);
-      try {
-        const url = new URL(settings.typesenseUrl);
-        const client = new TypesenseClient(
-          url.hostname,
-          parseInt(url.port) || (url.protocol === "https:" ? 443 : 8108),
-          url.protocol.replace(":", ""),
-          settings.typesenseApiKey
-        );
-        const ok = await client.healthCheck();
-        if (!ok) {
-          setSaving(false);
-          showMessage(t("TypesenseValidationTitle"), t("TypesenseValidationUnhealthy"));
+    setSaving(true);
+    try {
+      if (settings.searchMethod === "typesense" && initialSettings?.searchMethod !== "typesense") {
+        const error = await TypesenseClient.verifyConnection(settings.typesenseUrl, settings.typesenseApiKey);
+        if (error) {
+          if (error === "unhealthy") {
+            showMessage(t("TypesenseValidationTitle"), t("TypesenseValidationUnhealthy"));
+          } else {
+            showMessage(t("TypesenseValidationTitle"), error);
+          }
           return;
         }
-      } catch {
-        setSaving(false);
-        showMessage(t("TypesenseValidationTitle"), t("TypesenseValidationFailed"));
-        return;
       }
+      await saveSettings();
+      await saveLeaders();
+      onClose();
+    } finally {
       setSaving(false);
     }
-    await saveSettings();
-    await saveLeaders();
-    onClose();
   };
 
   const handleCancel = () => {

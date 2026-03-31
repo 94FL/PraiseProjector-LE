@@ -7,7 +7,6 @@ import {
   SongEntry,
   SongFound,
   SongFoundType,
-  SongHistoryEntry,
   SongPreferenceEntry,
 } from "./pp-types";
 import { log, logError } from "./pp-log";

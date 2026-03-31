@@ -318,10 +318,21 @@ const AppContent: React.FC = () => {
   }, []);
 
   const closeSettings = useCallback(() => {
+    const database = Database.getInstance();
+    database.verifySearchEngine(settingsRef.current);
     setShowSettings(false);
     setSettingsInitialTab(null);
     setSettingsInitialLeaderId(null);
   }, []);
+
+  useEffect(() => {
+    const database = Database.getInstance();
+    if (database) database.typesenseEngineEnabled = !showSettings;
+    return () => {
+      const database = Database.getInstance();
+      if (database) database.typesenseEngineEnabled = true;
+    };
+  }, [showSettings]);
 
   useEffect(() => {
     selectedLeaderRef.current = selectedLeader;

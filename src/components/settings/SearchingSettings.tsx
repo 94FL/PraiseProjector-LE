@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Settings } from "../../types";
 import { useLocalization } from "../../localization/LocalizationContext";
-import { TypesenseClient } from "../../../common/typesense-client";
 import "./SearchingSettings.css";
+import { TypesenseClient } from "../../../common/typesense-client";
 
 interface SearchingSettingsProps {
   settings: Settings;
@@ -17,29 +17,15 @@ const ENGINES = [
 const SearchingSettings: React.FC<SearchingSettingsProps> = ({ settings, updateSetting }) => {
   const { t } = useLocalization();
   const method = settings.searchMethod;
-  const isTraditional = method === "traditional";
-  const isTypesense = method === "typesense";
   const [testState, setTestState] = useState<"idle" | "testing" | "ok" | "error">("idle");
   const [testError, setTestError] = useState("");
 
   const testConnection = useCallback(async () => {
     setTestState("testing");
     setTestError("");
-    try {
-      const url = new URL(settings.typesenseUrl);
-      const client = new TypesenseClient(
-        url.hostname,
-        parseInt(url.port) || (url.protocol === "https:" ? 443 : 8108),
-        url.protocol.replace(":", ""),
-        settings.typesenseApiKey
-      );
-      const ok = await client.healthCheck();
-      setTestState(ok ? "ok" : "error");
-      if (!ok) setTestError(t("TypesenseTestUnhealthy"));
-    } catch (e) {
-      setTestState("error");
-      setTestError(e instanceof Error ? e.message : String(e));
-    }
+    const error = await TypesenseClient.verifyConnection(settings.typesenseUrl, settings.typesenseApiKey);
+    setTestState(error === "" ? "ok" : "error");
+    if (error) setTestError(error === "unhealthy" ? t("TypesenseTestUnhealthy") : error);
   }, [settings.typesenseUrl, settings.typesenseApiKey, t]);
 
   const platform = useMemo(() => {
@@ -103,7 +89,7 @@ const SearchingSettings: React.FC<SearchingSettingsProps> = ({ settings, updateS
       <hr className="my-3" />
 
       {/* Traditional Search Settings - only shown when selected */}
-      {isTraditional && (
+      {method === "traditional" && (
         <div className="row mb-3">
           <div className="col-md-12">
             <h5>{t("TraditionalSearchSettings")}</h5>
@@ -149,7 +135,7 @@ const SearchingSettings: React.FC<SearchingSettingsProps> = ({ settings, updateS
       )}
 
       {/* Typesense Settings - only shown when selected */}
-      {isTypesense && (
+      {method === "typesense" && (
         <div className="row mb-3">
           <div className="col-md-12">
             <h5>{t("TypesenseSettings")}</h5>

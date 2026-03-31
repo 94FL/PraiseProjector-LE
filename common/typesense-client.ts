@@ -50,6 +50,24 @@ export class TypesenseClient {
     });
   }
 
+  static async verifyConnection(url: string | URL, apiKey: string): Promise<string> {
+    try {
+      if (typeof url === "string") url = new URL(url);
+      const client = new TypesenseClient(
+        url.hostname,
+        parseInt(url.port) || (url.protocol === "https:" ? 443 : 8108),
+        url.protocol.replace(":", ""),
+        apiKey
+      );
+      if (!(await client.healthCheck())) return "unhealthy";
+      await client.search("*randomstringthatshouldnotmatch*", 1);
+      return "";
+    } catch (e) {
+      console.error("Database", "Typesense connection test failed", e);
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
   async healthCheck(): Promise<boolean> {
     const health = await this.client.health.retrieve();
     return !!health.ok;

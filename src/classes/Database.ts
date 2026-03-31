@@ -336,18 +336,41 @@ class Database {
     return { id: song.Id, version: song.version, text: song.Text };
   }
 
-  private rebuildSearchEngine(songs: Iterable<Song>) {
-    if (!this.typesense) return;
-    this.typesense.update(Array.from(songs, (s) => this.songToTypesenseInfo(s))).catch(() => {});
+  public verifySearchEngine(settings: Settings | null) {
+    const typesenseEnabled = settings?.searchMethod === "typesense";
+    if (typesenseEnabled && !this.typesense) {
+      this.ensureTypesenseInit(settings);
+      this.updateSearchEngine();
+    } else if (!typesenseEnabled && this.typesense) {
+      this.typesense = null;
+      this.updateSearchEngine();
+    }
+  }
+
+  private updateSearchEngine(newSongs?: Song[]) {
+    if (this.typesense) {
+      const songs = newSongs ?? this.getSongs();
+      this.typesense.update(songs.map((s) => this.songToTypesenseInfo(s))).catch((error) => {
+        console.error("Database", "Failed to rebuild Typesense index", error);
+      });
+    } else if (newSongs) {
+      for (const song of newSongs) {
+        this.words.add(song);
+      }
+    } else this.words.rebuild(this.getSongs());
   }
 
   private addSongToSearchEngine(song: Song) {
-    if (!this.typesense) return;
-    this.typesense.update([this.songToTypesenseInfo(song)]).catch(() => {});
+    if (this.typesense)
+      this.typesense.update([this.songToTypesenseInfo(song)]).catch((error) => {
+        console.error("Database", "Failed to update Typesense index", error);
+      });
+    else this.words.add(song);
   }
 
   private removeSongFromSearchEngine(_song: Song) {
     // Typesense non-existing results are filtered at search time
+    this.words.remove(_song);
   }
   private leaderFilters: Map<Leader, Set<Song>> = new Map();
   // Backup of original songs before user modification (version !== current when edited)
@@ -567,10 +590,9 @@ class Database {
       for (const item of dbState.songs) {
         const song = Song.fromJSON(item);
         songMap.set(song.Id, song);
-        this.words.add(song);
       }
       this.songs = songMap;
-      this.rebuildSearchEngine(songMap.values());
+      this.updateSearchEngine();
     }
 
     if (dbState.leaders) {
@@ -731,7 +753,6 @@ class Database {
 
   public addSong(song: Song): void {
     this.songs.set(song.Id, song);
-    this.words.add(song);
     this.addSongToSearchEngine(song);
     this.save();
   }
@@ -778,8 +799,6 @@ class Database {
     }
 
     this.songs.set(updatedSong.Id, updatedSong);
-    this.words.remove(existing);
-    this.words.add(updatedSong);
     this.removeSongFromSearchEngine(existing);
     this.addSongToSearchEngine(updatedSong);
     this.save();
@@ -787,7 +806,6 @@ class Database {
 
   public setSong(song: Song): void {
     this.songs.set(song.Id, song);
-    this.words.add(song);
     this.addSongToSearchEngine(song);
     this.save();
   }
@@ -1170,6 +1188,8 @@ class Database {
     return true;
   }
 
+  public typesenseEngineEnabled = false;
+
   public async filter(
     expr: string,
     leader: Leader | null = null,
@@ -1179,7 +1199,7 @@ class Database {
     order: SongOrder = SongOrder.Alphabetical,
     settings?: Settings | null
   ): Promise<SongFoundList> {
-    if (settings?.searchMethod === "typesense" && expr.trim()) {
+    if (this.typesenseEngineEnabled && settings?.searchMethod === "typesense" && expr.trim()) {
       try {
         const result = await this.typesenseFilter(
           expr,
@@ -1680,8 +1700,7 @@ class Database {
       result.songConflicts = mergeResult.conflicts;
       if (result.songsUpdated > 0) {
         console.info("Database", `Database updated from server: ${result.songsUpdated} songs`);
-        this.words.rebuild(this.getSongs());
-        this.rebuildSearchEngine(this.songs.values());
+        this.updateSearchEngine(this.getSongs().filter((s) => s.version > version));
       }
       if (result.songConflicts.length > 0) {
         console.info("Database", `Song conflicts detected: ${result.songConflicts.length}`);
@@ -1917,11 +1936,6 @@ class Database {
         }
       }
     }
-  }
-
-  public rebuildWords() {
-    this.words.rebuild(this.getSongs());
-    this.rebuildSearchEngine(this.songs.values());
   }
 
   // Leader management methods (matching C# Database class)
