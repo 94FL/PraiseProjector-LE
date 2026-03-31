@@ -99,7 +99,7 @@ function make_abbrev(full: string) {
   if (m) a += " " + m[2] + "x";
   return a;
 }
-
+/*
 function parseTag(tag: string | DifferentialText) {
   const split = (s: string) => {
     const m = /^(.*) ([0-9]+)[*xX]$/.exec(s);
@@ -114,7 +114,7 @@ function parseTag(tag: string | DifferentialText) {
       c.multiplier === p.multiplier ? c.multiplier : DifferentialText.create(p.multiplier?.toString() ?? "", c.multiplier?.toString() ?? ""),
   };
 }
-
+*/
 type ChordProEditorState = {
   data: string;
   cursorTarget: number | string | ChordPosition;
@@ -1539,7 +1539,7 @@ export class ChordProEditor extends ChordDrawer {
           return;
         }
         const commentLine = new ChordProLine(this.chordPro);
-        commentLine.setCommentDirectiveType();
+        commentLine.setCommentDirectiveType("normal");
         commentLine.setLyrics(tag);
         commentLine.genText();
         this.chordPro.lines.splice(line_obj.getLineIndex(), 0, commentLine);
@@ -2241,26 +2241,54 @@ export class ChordProEditor extends ChordDrawer {
       return true;
     }
 
-    if (e.ctrlKey && !e.altKey) {
-      let cont = false;
+    let cont = true;
+
+    if (e.altKey && !e.shiftKey) {
+      cont = false;
+      switch (code_string) {
+        case "T":
+          this.makeSelectionTitle();
+          break;
+        case "B":
+          this.tagSelection("start_of_bridge", this.getAutoTagValue("start_of_bridge"));
+          break;
+        case "C":
+          this.tagSelection("start_of_chorus", this.getAutoTagValue("start_of_chorus"));
+          break;
+        case "V":
+          this.tagSelection("start_of_verse", this.getAutoTagValue("start_of_verse"));
+          break;
+        case "G":
+          this.tagSelection("start_of_grid", this.getAutoTagValue("start_of_grid"));
+          break;
+        case "X":
+          this.tagSelection("", "");
+          break;
+        case "K":
+          this.toggleCommentType();
+          break;
+        default:
+          cont = true;
+          break;
+      }
+    } else if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      cont = false;
       switch (code_string) {
         case "A":
-          this.selectAll();
-          this.draw();
+          if (!e.shiftKey) {
+            this.selectAll();
+            this.draw();
+          }
           break;
         case "Z":
           if (e.shiftKey) this.redo();
           else this.undo();
           break;
         case "Y":
-          this.redo();
-          break;
-        case "T":
-          this.makeSelectionTitle();
+          if (!e.shiftKey) this.redo();
           break;
         case "B":
-          if (e.shiftKey) this.tagSelection("start_of_bridge", this.getAutoTagValue("start_of_bridge"));
-          else if (this.actionTarget instanceof ChordProLine) {
+          if (this.actionTarget instanceof ChordProLine) {
             this.saveState();
             this.draw();
           } else cont = true;
@@ -2269,43 +2297,32 @@ export class ChordProEditor extends ChordDrawer {
           if (!e.shiftKey) this.copySelected();
           break;
         case "C":
-          if (e.shiftKey) this.tagSelection("start_of_chorus", this.getAutoTagValue("start_of_chorus"));
-          else this.copySelected();
+          this.copySelected();
           break;
         case "V":
-          if (!e.shiftKey) {
-            this.paste();
-            this.draw();
-          } else this.tagSelection("start_of_verse", this.getAutoTagValue("start_of_verse"));
-          break;
-        case "G":
-          if (e.shiftKey) this.tagSelection("start_of_grid", this.getAutoTagValue("start_of_grid"));
+          this.paste(e.shiftKey);
+          this.draw();
           break;
         case "X":
-          if (!e.shiftKey) {
-            this.saveState();
-            this.copySelected();
-            this.eraseSelection();
-            this.draw();
-          } else this.tagSelection("", "");
+          this.saveState();
+          this.copySelected();
+          this.eraseSelection();
+          this.draw();
           break;
         case "M":
           if (e.shiftKey) this.clearAllMarks();
           else if (this.actionTarget && !(this.actionTarget instanceof ChordProHitBox)) this.actionTarget.marked = this.actionTarget.marked ? 0 : 1;
           this.draw();
           break;
-        case "K":
-          if (e.shiftKey) this.toggleCommentType();
-          break;
         default:
           cont = true;
           break;
       }
+    }
 
-      if (!cont) {
-        e.preventDefault();
-        return true;
-      }
+    if (!cont) {
+      e.preventDefault();
+      return true;
     }
 
     if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && code_string === "INSERT") {
@@ -2394,14 +2411,14 @@ export class ChordProEditor extends ChordDrawer {
     }
   }
 
-  async paste() {
+  async paste(textOnly = false) {
     if (!this.actionTarget || this.cursorPos == null) return;
 
     if (this.onPaste) this.onPaste();
     else {
       try {
         const { text, isChordPro } = await clipboard.readBestText();
-        this._paste(text, isChordPro);
+        this._paste(text, isChordPro, textOnly ? "lyrics" : "metadata");
       } catch (err) {
         this.log("clipBoard.readBestText: " + err);
         try {
@@ -2412,7 +2429,7 @@ export class ChordProEditor extends ChordDrawer {
             document.execCommand("paste");
             str = this.systemPasteContent || this.clipboardTextArea.value;
           }
-          if (str !== undefined) this._paste(str, false);
+          if (str !== undefined) this._paste(str, false, textOnly ? "lyrics" : "metadata");
         } catch (e2) {
           this.log(String(e2));
         }
@@ -2420,11 +2437,7 @@ export class ChordProEditor extends ChordDrawer {
     }
   }
 
-  externalPaste(str: string) {
-    this._paste(str, true);
-  }
-
-  private _paste(str: string, isChordPro = false) {
+  private _paste(str: string, isChordPro = false, mode: "lyrics" | "chords" | "directives" | "metadata" = "metadata") {
     // Normalize line endings
     str = str.replace(/\r\n/g, "\n");
 
@@ -2450,12 +2463,20 @@ export class ChordProEditor extends ChordDrawer {
           // Merge the first pasted line into the current cursor line
           const firstLine = pastedLines[0];
           if (firstLine && !(firstLine instanceof ChordProAbc) && !firstLine.isGrid) {
-            for (const chord of firstLine.chords) {
-              chord.pos += cursorPos;
-              chord.line = line_obj;
+            if (mode === "lyrics") {
+              line_obj.insertString(cursorPos, firstLine.lyrics);
+            } else {
+              if (mode === "directives") {
+                line_obj.styles = firstLine.styles.clone();
+                line_obj.setCommentDirectiveType(firstLine.getCommentType());
+              }
+              for (const chord of firstLine.chords) {
+                chord.pos += cursorPos;
+                chord.line = line_obj;
+              }
+              line_obj.insertString(cursorPos, firstLine.lyrics);
+              line_obj.chords.push(...firstLine.chords);
             }
-            line_obj.insertString(cursorPos, firstLine.lyrics);
-            line_obj.chords.push(...firstLine.chords);
             this.cursorPos = cursorPos + firstLine.lyrics.length;
             line_obj.genText();
           }
@@ -2467,6 +2488,8 @@ export class ChordProEditor extends ChordDrawer {
               for (let i = 1; i < pastedLines.length; ++i) {
                 const newLine = pastedLines[i].clone();
                 newLine.doc = this.chordPro;
+                if (mode === "lyrics") newLine.chords = [];
+                if (mode !== "directives") newLine.styles = line_obj.styles.clone();
                 this.chordPro.lines.splice(insertIdx + i, 0, newLine);
               }
               // Move cursor to end of last inserted line
@@ -2479,9 +2502,11 @@ export class ChordProEditor extends ChordDrawer {
           }
 
           // Copy metadata from pasted document into current
-          for (const key of ChordProDocument.metaDataDirectives) {
-            const value = tempChordPro.getMeta(key);
-            if (value) this.chordPro.setMeta(key, value);
+          if (mode === "metadata") {
+            for (const key of ChordProDocument.metaDataDirectives) {
+              const value = tempChordPro.getMeta(key);
+              if (value) this.chordPro.setMeta(key, value);
+            }
           }
         } else {
           // ChordPro parse failed: fall through to plain-text logic below
@@ -2490,7 +2515,7 @@ export class ChordProEditor extends ChordDrawer {
       }
 
       if (!isChordPro) {
-        // Plain-text: extract inline [chord] markers from the pasted text
+        // Plain-text: optionally extract inline [chord] markers unless text-only paste is requested
         const chords: { text: string; pos: number }[] = [];
         let plainText = "";
         let i = 0;
@@ -2499,7 +2524,7 @@ export class ChordProEditor extends ChordDrawer {
             const closeIdx = str.indexOf("]", i + 1);
             if (closeIdx >= 0) {
               const chordText = str.substring(i + 1, closeIdx);
-              if (chordText) chords.push({ text: chordText, pos: cursorPos + plainText.length });
+              if (chordText && mode !== "lyrics") chords.push({ text: chordText, pos: cursorPos + plainText.length });
               i = closeIdx + 1;
               continue;
             }
@@ -2551,19 +2576,23 @@ export class ChordProEditor extends ChordDrawer {
     this.draw();
   }
 
-  getSelectedText(lyricsOnly = false): string {
+  getSelectedText(mode: "lyrics" | "chords" | "directives" = "directives"): string {
     let str = "";
     if (this.chordPro && this.selectionStart != null && this.selectionEnd != null && this.comparePositions(this.selectionStart, this.selectionEnd)) {
       if (this.selectionStart instanceof ChordProSelection && this.selectionEnd instanceof ChordProSelection) {
+        if (mode === "directives") {
+          const docText = this.getSelectedChordProTextWithDirectives();
+          if (docText) return docText;
+        }
         for (let l = this.selectionStart.line; l <= this.selectionEnd.line; ++l) {
           const line_obj = this.chordPro.lines[l];
           if (this.selectionStart.line < l && l < this.selectionEnd.line) {
-            str += lyricsOnly ? line_obj.lyrics + "\n" : this.getLineChordProText(line_obj, 0, line_obj.lyrics.length) + "\n";
+            str += mode === "lyrics" ? line_obj.lyrics + "\n" : this.getLineChordProText(line_obj, 0, line_obj.lyrics.length) + "\n";
             continue;
           }
           const start = this.selectionStart.line === l ? this.selectionStart.col : 0,
             end = this.selectionEnd.line === l ? this.selectionEnd.col : line_obj.lyrics.length;
-          str += lyricsOnly ? line_obj.lyrics.substring(start, end) : this.getLineChordProText(line_obj, start, end);
+          str += mode === "lyrics" ? line_obj.lyrics.substring(start, end) : this.getLineChordProText(line_obj, start, end);
           if (this.selectionEnd.line !== l) str += "\n";
         }
       } else if (typeof this.selectionStart === "number" && typeof this.selectionEnd === "number") {
@@ -2574,6 +2603,42 @@ export class ChordProEditor extends ChordDrawer {
       }
     }
     return str;
+  }
+
+  /** Returns selected range as ChordPro document text, preserving section/comment directives. */
+  private getSelectedChordProTextWithDirectives(): string {
+    if (!this.chordPro || !(this.selectionStart instanceof ChordProSelection) || !(this.selectionEnd instanceof ChordProSelection)) return "";
+
+    const lineCount = this.chordPro.lines.length;
+    if (!lineCount) return "";
+
+    const startLine = Math.max(0, Math.min(this.selectionStart.line, lineCount - 1));
+    let endLine = Math.max(0, Math.min(this.selectionEnd.line, lineCount - 1));
+    if (this.selectionEnd.col === 0 && this.selectionEnd.line > this.selectionStart.line) {
+      endLine = Math.max(startLine, endLine - 1);
+    }
+
+    const selectedDoc = new ChordProDocument(this.chordPro.system, "");
+    selectedDoc.lines = [];
+
+    for (let l = startLine; l <= endLine; ++l) {
+      const src = this.chordPro.lines[l];
+      const clone = src.clone(true);
+      clone.doc = selectedDoc;
+
+      // Keep partial selection behavior for first/last selected line while preserving directives.
+      if (!(clone instanceof ChordProAbc)) {
+        const len = clone.lyrics.length;
+        const from = l === this.selectionStart.line ? Math.max(0, Math.min(this.selectionStart.col, len)) : 0;
+        const to = l === this.selectionEnd.line ? Math.max(from, Math.min(this.selectionEnd.col, len)) : len;
+        if (to < len) clone.deleteString(to, len - to);
+        if (from > 0) clone.deleteString(0, from);
+      }
+
+      selectedDoc.lines.push(clone);
+    }
+
+    return selectedDoc.generateDocument();
   }
 
   /** Returns ChordPro formatted text for a portion of a line, embedding [chords] at correct positions. */
@@ -2599,9 +2664,9 @@ export class ChordProEditor extends ChordDrawer {
   }
 
   async copySelected() {
-    const chordpro = this.getSelectedText();
+    const chordpro = this.getSelectedText("directives");
     if (!chordpro) return;
-    const plain = this.getSelectedText(true);
+    const plain = this.getSelectedText("lyrics");
 
     if (this.onCopy) this.onCopy(plain, chordpro);
     else {
@@ -2660,6 +2725,8 @@ export class ChordProEditor extends ChordDrawer {
     const disabledColor = dark ? "#666666" : "#a0a0a0";
     const separatorColor = dark ? "#444444" : "#d4d4d4";
     const shortcutColor = dark ? "#888888" : "#888888";
+    const ctrlCmd = "Ctrl/Cmd";
+    const altOption = "Alt/Option";
 
     const menu = document.createElement("div");
     menu.style.cssText = `
@@ -2728,7 +2795,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Undo"),
-        "Ctrl+Z",
+        `${ctrlCmd}+Z`,
         () => {
           this.undo();
         },
@@ -2738,7 +2805,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Redo"),
-        "Ctrl+Y",
+        "Ctrl+Y / Cmd+Shift+Z",
         () => {
           this.redo();
         },
@@ -2753,7 +2820,7 @@ export class ChordProEditor extends ChordDrawer {
     if (isEditable) {
       addItem(
         this.localize("Cut"),
-        "Ctrl+X",
+        `${ctrlCmd}+X`,
         () => {
           this.saveState();
           this.copySelected();
@@ -2766,7 +2833,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Copy"),
-        "Ctrl+C",
+        `${ctrlCmd}+C`,
         () => {
           this.copySelected();
         },
@@ -2776,7 +2843,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Paste"),
-        "Ctrl+V",
+        `${ctrlCmd}+V`,
         () => {
           this.paste();
           this.draw();
@@ -2786,8 +2853,19 @@ export class ChordProEditor extends ChordDrawer {
       );
 
       addItem(
+        this.localize("Paste As Plain Text"),
+        `${ctrlCmd}+Shift+V`,
+        () => {
+          this.paste(true);
+          this.draw();
+        },
+        true,
+        "\u238C"
+      );
+
+      addItem(
         this.localize("Select All"),
-        "Ctrl+A",
+        `${ctrlCmd}+A`,
         () => {
           this.selectAll();
           this.draw();
@@ -2826,7 +2904,7 @@ export class ChordProEditor extends ChordDrawer {
       // Section tags
       addItem(
         this.localize("Title"),
-        "Ctrl+T",
+        `${altOption}+T`,
         () => {
           this.makeSelectionTitle();
         },
@@ -2836,7 +2914,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Verse"),
-        "Ctrl+Shift+V",
+        `${altOption}+V`,
         () => {
           this.tagSelection("start_of_verse", this.getAutoTagValue("start_of_verse"));
         },
@@ -2846,7 +2924,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Chorus"),
-        "Ctrl+Shift+C",
+        `${altOption}+C`,
         () => {
           this.tagSelection("start_of_chorus", this.getAutoTagValue("start_of_chorus"));
         },
@@ -2856,7 +2934,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Bridge"),
-        "Ctrl+Shift+B",
+        `${altOption}+B`,
         () => {
           this.tagSelection("start_of_bridge", this.getAutoTagValue("start_of_bridge"));
         },
@@ -2866,7 +2944,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Grid"),
-        "Ctrl+Shift+G",
+        `${altOption}+G`,
         () => {
           this.tagSelection("start_of_grid", this.getAutoTagValue("start_of_grid"));
         },
@@ -2876,7 +2954,7 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Comment"),
-        "Ctrl+Shift+K",
+        `${altOption}+K`,
         () => {
           this.toggleCommentType();
         },
@@ -2886,14 +2964,14 @@ export class ChordProEditor extends ChordDrawer {
 
       addItem(
         this.localize("Clear Tag"),
-        "Ctrl+Shift+X",
+        `${altOption}+X`,
         () => {
           this.tagSelection("", "");
         },
         hasLineSelection,
         "\u2715"
       );
-    } else addItem(this.localize("Copy All"), "Ctrl+C", () => this.copyAll(), true, "\u2398");
+    } else addItem(this.localize("Copy All"), `${ctrlCmd}+C`, () => this.copyAll(), true, "\u2398");
 
     // Position menu at mouse coordinates, clamping to viewport
     let left = e.clientX;
@@ -3003,7 +3081,7 @@ export class ChordProEditor extends ChordDrawer {
   }
 
   makeSelectionTitle() {
-    const str = this.getSelectedText(true);
+    const str = this.getSelectedText("lyrics");
     if (this.chordPro && str) {
       this.saveState();
       this.chordPro.setMeta("title", str.replace(/\?r\n/gs, " ").replace(/ +/g, " ").trim());

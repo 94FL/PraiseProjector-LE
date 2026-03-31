@@ -398,6 +398,7 @@ export class ChordProLine {
     targetLine.chords = this.chords.map((chord) => chord.clone(targetLine));
     targetLine.comments = this.comments.clone();
     targetLine.styles = this.styles.clone();
+    targetLine.commentDirectiveType = this.commentDirectiveType;
     targetLine.sourceLineNumber = this.sourceLineNumber;
     targetLine.multiplierOverride = this.multiplierOverride;
     if (!dataOnly) {
@@ -440,7 +441,7 @@ export class ChordProLine {
     return "comment" + (this.commentDirectiveType ? "_" + this.commentDirectiveType : "");
   }
 
-  setCommentDirectiveType(type: ChordProCommentType | undefined = "") {
+  setCommentDirectiveType(type: ChordProCommentType | undefined) {
     if (type === undefined) this.commentDirectiveType = undefined;
     else this.commentDirectiveType = type === "normal" ? "" : type;
   }

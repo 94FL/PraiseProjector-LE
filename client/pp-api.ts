@@ -61,9 +61,6 @@ export function load(chp: string, editable?: boolean, compareBase?: string) {
     };
   }
 }
-export function doPaste(s: string) {
-  if (editor) editor.externalPaste(s);
-}
 export function getMetadataList() {
   return getJoinedMetaDataDirectives(":");
 }
