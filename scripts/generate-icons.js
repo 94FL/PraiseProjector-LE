@@ -52,16 +52,14 @@ async function generateIcons() {
   // Generate PWA icons for web app
   const pwaOutputDir = path.join(__dirname, "../public/assets");
   console.log("Generating PWA icons...");
-  
-  // 192x192 for PWA manifest
-  const png192 = await sharp(inputPng).resize(192, 192).png().toBuffer();
-  fs.writeFileSync(path.join(pwaOutputDir, "pp-192.png"), png192);
-  console.log("Created pp-192.png");
-  
-  // 512x512 for PWA manifest
-  const png512 = await sharp(inputPng).resize(512, 512).png().toBuffer();
-  fs.writeFileSync(path.join(pwaOutputDir, "pp-512.png"), png512);
-  console.log("Created pp-512.png");
+
+  const generatedSizes = [];
+  for (const size of [48, 64, 192, 512]) {
+    const png = await sharp(inputPng).resize(size, size).png().toBuffer();
+    fs.writeFileSync(path.join(pwaOutputDir, `pp-${size}.png`), png);
+    console.log(`Created pp-${size}.png`);
+    generatedSizes.push(size);
+  }
 
   console.log("Done! Icons generated successfully.");
   console.log("");
@@ -69,8 +67,7 @@ async function generateIcons() {
   console.log(`  - ${outputFilename}.ico (Windows)`);
   console.log(`  - ${outputFilename}.icns (macOS)`);
   console.log(`  - ${outputFilename}.png (Linux)`);
-  console.log("  - pp-192.png (PWA)");
-  console.log("  - pp-512.png (PWA)");
+  for (const size of generatedSizes) console.log(`  - pp-${size}.png (PWA)`);
 }
 
 generateIcons().catch(console.error);

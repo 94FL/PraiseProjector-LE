@@ -65,6 +65,5 @@ tsconfig.node.tsbuildinfo
 
 # Generated icons (can be regenerated from src/assets/pp.png)
 public/assets/pp.ico
-public/assets/pp-192.png
-public/assets/pp-512.png
 public/assets/pp.icns
+public/assets/pp-*.png
