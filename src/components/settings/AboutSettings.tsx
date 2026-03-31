@@ -7,10 +7,15 @@ import "./AboutSettings.css";
 
 // Version is injected by Vite from package.json
 declare const __APP_VERSION__: string;
+declare const __APP_COMMIT__: string;
+declare const __APP_SHOW_COMMIT__: boolean;
 
 const AboutSettings: React.FC = () => {
   const { t } = useLocalization();
   const version = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0";
+  const commit = typeof __APP_COMMIT__ !== "undefined" ? __APP_COMMIT__ : "";
+  const showCommit = typeof __APP_SHOW_COMMIT__ !== "undefined" ? __APP_SHOW_COMMIT__ : false;
+  const versionDisplay = showCommit && commit ? `${version} (${commit})` : version;
   const isElectronRuntime = !!window.electronAPI;
   const licenseSections = getSettingsAboutLicenseSections(isElectronRuntime ? "full-electron" : "frontend-only");
 
@@ -80,7 +85,7 @@ const AboutSettings: React.FC = () => {
     <div className="container-fluid">
       <h3>{t("AboutTitle")}</h3>
       <p>{t("AboutDescription")}</p>
-      <p>{t("AboutVersion").replace("{version}", version)}</p>
+      <p>{t("AboutVersion").replace("{version}", versionDisplay)}</p>
       {renderUpdateStatus()}
       {renderUpdateActions()}
       <p>

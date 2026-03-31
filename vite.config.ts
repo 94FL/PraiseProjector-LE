@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
+import { execSync } from 'node:child_process'
 import electron from 'vite-plugin-electron'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -15,6 +16,21 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, __dirname, '');
   const cloudApiHost = env.VITE_CLOUD_API_HOST || process.env.VITE_CLOUD_API_HOST || '';
   const cloudApiBaseUrl = cloudApiHost ? `${cloudApiHost}/praiseprojector` : '';
+  const appCommit = process.env.PP_COMMIT_SHA || process.env.GIT_COMMIT || (() => {
+    try {
+      return execSync('git rev-parse --short HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      return '';
+    }
+  })();
+  const appCommitMessage = process.env.PP_COMMIT_MESSAGE || process.env.GIT_COMMIT_MESSAGE || (() => {
+    try {
+      return execSync('git log -1 --pretty=%s', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      return '';
+    }
+  })();
+  const showCommitInAbout = Boolean(appCommit) && appCommitMessage !== `v${pkg.version}`;
   // Web builds (dev and prod) use a relative path so the runtime host is derived
   // from window.location.origin in config.ts — allowing the webapp to work on any host.
   // Electron builds use the absolute cloudApiBaseUrl when VITE_CLOUD_API_HOST is set,
@@ -143,6 +159,8 @@ export default defineConfig(({ command, mode }) => {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
       'import.meta.env.VITE_CLOUD_API_HOST': JSON.stringify(cloudApiHost),
       '__APP_VERSION__': JSON.stringify(pkg.version),
+      '__APP_COMMIT__': JSON.stringify(appCommit),
+      '__APP_SHOW_COMMIT__': JSON.stringify(showCommitInAbout),
     }
   };
 });
